@@ -1,6 +1,4 @@
-# MiniSQL 文法基线
-
-来自 [公共契约 v1.5](../plan/handoff/contracts.md) 的 §2.1。M1 原样复制，Parser 完成时还须核对实现与文法一致。
+# MiniSQL Grammar
 
 ```ebnf
 program        -> statement_list EOF ;
@@ -32,3 +30,6 @@ arith_expr     -> term { ('+' | '-') term } ;
 term           -> factor { ('*' | '/') factor } ;
 factor         -> IDENTIFIER | literal | '(' expression ')' ;
 ```
+
+Keywords are case insensitive. `NULL`, unsupported reserved statements, unary
+signs, and SELECT list expressions are rejected by the parser.
