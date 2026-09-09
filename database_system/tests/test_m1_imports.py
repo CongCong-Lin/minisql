@@ -54,13 +54,14 @@ def test_c_backends_are_real_while_b_storage_remains_explicit_stub(tmp_path):
 
 
 def test_business_entrypoints_remain_explicit_stubs():
-    """M1 不把尚未实现的业务返回为空成功。"""
+    """尚未接入的下游入口仍明确报告存根，Lexer 已可独立使用。"""
     from sql_compiler import compile_sql
     from sql_compiler.catalog import Catalog
     from sql_compiler.lexer import tokenize
     from engine.runtime import run
 
-    for action in (lambda: tokenize(""), lambda: run("", Catalog()),
+    assert tokenize("")[-1].type.name == "EOF"
+    for action in (lambda: run("", Catalog()),
                    lambda: compile_sql("", Catalog())):
         with pytest.raises(NotImplementedError, match="M1"):
             action()
@@ -75,4 +76,7 @@ def test_command_stubs_do_not_claim_success(module, tmp_path):
                             env=env, capture_output=True)
     assert result.returncode == 2
     assert result.stdout == b""
-    assert b"M1" in result.stderr
+    if module == "cli.main":
+        assert b"M1" in result.stderr
+    else:
+        assert b"SQL" in result.stderr or b"expected" in result.stderr
