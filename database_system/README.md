@@ -23,7 +23,7 @@ python -m cli.main example.sql --mode database --data-dir data
 python -m tools.case_runner --suite all
 ```
 
-当前 CLI 和用例执行器明确报告 M1 未实现并返回 2，不宣称能运行 SQL。用例目录目前没有验收用例，M1 测试不计入课程要求的 60 条 SQL 用例。
+当前已实现 Lexer、CLI 输出协议、用例执行器及对应的替身测试；Parser、Catalog、页存储、执行器和 runtime 的真实 SQL 链路仍在后续实现中。用例执行器会为每个 SQL 用例创建隔离目录，并在缺少用例或 expected 文件时返回 runner 错误。
 
 ## 职责边界
 

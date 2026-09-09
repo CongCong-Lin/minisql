@@ -14,4 +14,4 @@ python -m pip install -r database_system/requirements.txt
 python -m pytest
 ```
 
-测试通过只表示 M1 对接检查通过。SQL 编译、数据持久化和完整命令行尚待实现；生产存根会明确抛出 `NotImplementedError`。本目录未初始化 Git 或关联远程仓库。
+当前 A 已完成 Lexer、CLI 输出协议、用例执行器和 CLI 替身测试；Parser、Catalog、页存储、执行器和 runtime 的真实 SQL 链路仍待其他模块完成。本目录未初始化 Git 或关联远程仓库。
