@@ -1,0 +1,2 @@
+CREATE TABLE student(id INT,name VARCHAR);
+CREATE TABLE other(a INT,A VARCHAR);

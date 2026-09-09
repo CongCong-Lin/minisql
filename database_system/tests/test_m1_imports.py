@@ -31,23 +31,26 @@ def test_all_modules_import_in_fresh_process_without_files(order, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_backend_construction_only_wires_dependencies(tmp_path):
-    """骨架构造可用于依赖注入，但不会伪造加载成功或创建文件。"""
+def test_c_backends_are_real_while_b_storage_remains_explicit_stub(tmp_path):
+    """C 已能建页和创建快照，B 未实现时不能假装目录已加载。"""
     from sql_compiler.catalog import Catalog
     from storage.file_manager import PageStore
     from storage.storage_engine import StorageEngine
 
     pages = PageStore(str(tmp_path / "minisql.db"), capacity=1)
     storage = StorageEngine(pages)
-    catalog = Catalog(storage=storage)
-    assert storage.pages is pages and catalog.storage is storage
-    assert list(tmp_path.iterdir()) == []
-    with pytest.raises(NotImplementedError):
-        pages.get_page(0)
-    with pytest.raises(NotImplementedError):
-        storage.has_table("t")
-    with pytest.raises(NotImplementedError):
-        catalog.snapshot()
+    try:
+        assert storage.pages is pages
+        assert (tmp_path / "minisql.db").stat().st_size == 4096
+        assert pages.get_page(0).data[:4] == b"MSQL"
+        catalog = Catalog()
+        assert catalog.snapshot().list_tables() == []
+        with pytest.raises(NotImplementedError):
+            storage.has_table("t")
+        with pytest.raises(NotImplementedError):
+            Catalog(storage=storage)
+    finally:
+        pages.close()
 
 
 def test_business_entrypoints_remain_explicit_stubs():

@@ -1,8 +1,8 @@
-# MiniSQL 工程骨架
+# MiniSQL 工程
 
 ## 当前里程碑
 
-M1 已提供公共异常、Token、AST、结果和页对象，以及全部对外接口存根。内部单语句编译连接器用测试替身验证数据传递、结果快照和异常传播。没有 SQL 解析算法、页读写算法或真实执行器。
+M1 已提供公共异常、Token、AST、结果和接口骨架。C 已实现类型、语义、内存／JSON／系统目录后端，以及真实页读写、LRU／FIFO 缓存和空闲链，详见 [C 交付说明](docs/c_implementation.md)。SQL 解析、表级存储、计划和执行器仍为其他成员待实现模块。
 
 ## 运行检查
 
@@ -23,7 +23,7 @@ python -m cli.main example.sql --mode database --data-dir data
 python -m tools.case_runner --suite all
 ```
 
-当前 CLI 和用例执行器明确报告 M1 未实现并返回 2，不宣称能运行 SQL。用例目录目前没有验收用例，M1 测试不计入课程要求的 60 条 SQL 用例。
+当前 CLI 和用例执行器仍明确报告 M1 未实现并返回 2。C 已提交 16 条公共 SQL 用例及预期输出，语义结果通过模块核对，完整命令行比对待联调。模块参数化测试不计入课程要求的 60 条 SQL 用例。
 
 ## 职责边界
 
