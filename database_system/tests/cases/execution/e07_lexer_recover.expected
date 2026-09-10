@@ -1,0 +1,15 @@
+[LEXER] Error at line 1, column 1: illegal character '@'
+TOKENS: [{"column":1,"lexeme":"CREATE","line":2,"type":"KEYWORD"},{"column":8,"lexeme":"TABLE","line":2,"type":"KEYWORD"},{"column":14,"lexeme":"t","line":2,"type":"IDENTIFIER"},{"column":15,"lexeme":"(","line":2,"type":"DELIMITER"},{"column":16,"lexeme":"id","line":2,"type":"IDENTIFIER"},{"column":19,"lexeme":"INT","line":2,"type":"KEYWORD"},{"column":22,"lexeme":")","line":2,"type":"DELIMITER"},{"column":23,"lexeme":";","line":2,"type":"DELIMITER"},{"column":24,"lexeme":"","line":2,"type":"EOF"}]
+AST: [{"column":1,"columns":[{"col_type":"INT","column":16,"line":2,"name":"id","node":"ColumnDef"}],"line":2,"node":"CreateTableStmt","table":"t"}]
+SEMANTIC: OK
+PLAN: {"columns":[{"column":16,"line":2,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+OPT_PLAN: {"columns":[{"column":16,"line":2,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+RESULT: OK
+TOKENS: [{"column":1,"lexeme":"SELECT","line":3,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":3,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":3,"type":"KEYWORD"},{"column":15,"lexeme":"t","line":3,"type":"IDENTIFIER"},{"column":16,"lexeme":";","line":3,"type":"DELIMITER"},{"column":17,"lexeme":"","line":3,"type":"EOF"}]
+AST: [{"column":1,"columns":"*","line":3,"node":"SelectStmt","table":"t","where":null}]
+SEMANTIC: OK
+PLAN: {"child":{"op":"SeqScan","table":"t"},"columns":"*","op":"Project"}
+OPT_PLAN: {"child":{"op":"SeqScan","table":"t"},"columns":"*","op":"Project"}
+COLUMNS: ["id"]
+RESULT: 0 rows selected
+EXIT: 1

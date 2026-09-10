@@ -1,0 +1,3 @@
+@;
+CREATE TABLE t(id INT);
+SELECT * FROM t;

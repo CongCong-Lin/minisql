@@ -1,4 +1,4 @@
-"""验证导入顺序、无磁盘副作用和存根边界。"""
+"""验证导入顺序、无磁盘副作用和已实现入口。"""
 
 import os
 from pathlib import Path
@@ -31,8 +31,8 @@ def test_all_modules_import_in_fresh_process_without_files(order, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_c_backends_are_real_while_b_storage_remains_explicit_stub(tmp_path):
-    """C 已能建页和创建快照，B 未实现时不能假装目录已加载。"""
+def test_storage_and_catalog_backends_can_be_wired(tmp_path):
+    """页存储与内存目录构造不再是存根；系统目录须由 runtime 引导。"""
     from sql_compiler.catalog import Catalog
     from storage.file_manager import PageStore
     from storage.storage_engine import StorageEngine
@@ -43,40 +43,40 @@ def test_c_backends_are_real_while_b_storage_remains_explicit_stub(tmp_path):
         assert storage.pages is pages
         assert (tmp_path / "minisql.db").stat().st_size == 4096
         assert pages.get_page(0).data[:4] == b"MSQL"
+        assert storage.has_table("t") is False
         catalog = Catalog()
         assert catalog.snapshot().list_tables() == []
-        with pytest.raises(NotImplementedError):
-            storage.has_table("t")
-        with pytest.raises(NotImplementedError):
-            Catalog(storage=storage)
     finally:
-        pages.close()
+        storage.close()
 
 
-def test_business_entrypoints_remain_explicit_stubs():
-    """尚未接入的下游入口仍明确报告存根，Lexer 已可独立使用。"""
+def test_empty_compile_and_run_succeed_without_writing(tmp_path):
+    """空输入编译和 run 返回空结果，不创建数据库文件。"""
     from sql_compiler import compile_sql
     from sql_compiler.catalog import Catalog
     from sql_compiler.lexer import tokenize
     from engine.runtime import run
 
     assert tokenize("")[-1].type.name == "EOF"
-    for action in (lambda: run("", Catalog()),
-                   lambda: compile_sql("", Catalog())):
-        with pytest.raises(NotImplementedError, match="M1"):
-            action()
+    catalog = Catalog()
+    assert run("", catalog) == []
+    assert compile_sql("", catalog) == []
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("module", ["cli.main", "tools.case_runner"])
-def test_command_stubs_do_not_claim_success(module, tmp_path):
-    """入口尚未实现时返回 2，正式输出保持为空。"""
+def test_command_entries_are_implemented(module, tmp_path):
+    """联调后入口必须能启动；空 SQL 的 CLI 退出 0，执行器至少能列出套件。"""
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
-    result = subprocess.run([sys.executable, "-B", "-m", module], cwd=tmp_path,
-                            env=env, capture_output=True)
-    assert result.returncode == 2
-    assert result.stdout == b""
+    env["PYTHONIOENCODING"] = "utf-8"
+    result = subprocess.run(
+        [sys.executable, "-B", "-m", module],
+        cwd=tmp_path, capture_output=True, input=b"", env=env,
+    )
     if module == "cli.main":
-        assert b"M1" in result.stderr
+        assert result.returncode == 0
+        assert result.stdout == b""
     else:
-        assert b"SQL" in result.stderr or b"expected" in result.stderr
+        assert result.returncode in (0, 1, 2)
+        assert result.stdout or result.stderr

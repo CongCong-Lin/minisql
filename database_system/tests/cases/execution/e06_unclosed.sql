@@ -1,0 +1,2 @@
+SELECT 'oops;
+CREATE TABLE t(id INT);

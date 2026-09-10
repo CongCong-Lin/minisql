@@ -1,0 +1,9 @@
+TOKENS: [{"column":1,"lexeme":"CREATE","line":1,"type":"KEYWORD"},{"column":8,"lexeme":"TABLE","line":1,"type":"KEYWORD"},{"column":14,"lexeme":"t","line":1,"type":"IDENTIFIER"},{"column":15,"lexeme":"(","line":1,"type":"DELIMITER"},{"column":16,"lexeme":"id","line":1,"type":"IDENTIFIER"},{"column":19,"lexeme":"INT","line":1,"type":"KEYWORD"},{"column":22,"lexeme":")","line":1,"type":"DELIMITER"},{"column":23,"lexeme":";","line":1,"type":"DELIMITER"},{"column":24,"lexeme":"","line":1,"type":"EOF"}]
+AST: [{"column":1,"columns":[{"col_type":"INT","column":16,"line":1,"name":"id","node":"ColumnDef"}],"line":1,"node":"CreateTableStmt","table":"t"}]
+SEMANTIC: OK
+PLAN: {"columns":[{"column":16,"line":1,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+OPT_PLAN: {"columns":[{"column":16,"line":1,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+RESULT: OK
+TOKENS: [{"column":1,"lexeme":"SELECT","line":2,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":2,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":2,"type":"KEYWORD"},{"column":15,"lexeme":"t","line":2,"type":"IDENTIFIER"},{"column":1,"lexeme":"SELECT","line":3,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":3,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":3,"type":"KEYWORD"},{"column":15,"lexeme":"t","line":3,"type":"IDENTIFIER"},{"column":16,"lexeme":";","line":3,"type":"DELIMITER"},{"column":17,"lexeme":"","line":3,"type":"EOF"}]
+[PARSER] Error at line 3, column 1: unexpected token 'SELECT', expected: ';'
+EXIT: 1

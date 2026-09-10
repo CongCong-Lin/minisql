@@ -1,0 +1,50 @@
+TOKENS: [{"column":1,"lexeme":"CREATE","line":1,"type":"KEYWORD"},{"column":8,"lexeme":"TABLE","line":1,"type":"KEYWORD"},{"column":14,"lexeme":"student","line":1,"type":"IDENTIFIER"},{"column":21,"lexeme":"(","line":1,"type":"DELIMITER"},{"column":22,"lexeme":"id","line":1,"type":"IDENTIFIER"},{"column":25,"lexeme":"INT","line":1,"type":"KEYWORD"},{"column":28,"lexeme":",","line":1,"type":"DELIMITER"},{"column":30,"lexeme":"name","line":1,"type":"IDENTIFIER"},{"column":35,"lexeme":"VARCHAR","line":1,"type":"KEYWORD"},{"column":42,"lexeme":")","line":1,"type":"DELIMITER"},{"column":43,"lexeme":";","line":1,"type":"DELIMITER"},{"column":44,"lexeme":"","line":1,"type":"EOF"}]
+AST: [{"column":1,"columns":[{"col_type":"INT","column":22,"line":1,"name":"id","node":"ColumnDef"},{"col_type":"VARCHAR","column":30,"line":1,"name":"name","node":"ColumnDef"}],"line":1,"node":"CreateTableStmt","table":"student"}]
+SEMANTIC: OK
+PLAN: {"columns":[{"column":22,"line":1,"name":"id","type":"INT"},{"column":30,"line":1,"name":"name","type":"VARCHAR"}],"op":"CreateTable","table":"student"}
+OPT_PLAN: {"columns":[{"column":22,"line":1,"name":"id","type":"INT"},{"column":30,"line":1,"name":"name","type":"VARCHAR"}],"op":"CreateTable","table":"student"}
+RESULT: OK
+TOKENS: [{"column":1,"lexeme":"INSERT","line":2,"type":"KEYWORD"},{"column":8,"lexeme":"INTO","line":2,"type":"KEYWORD"},{"column":13,"lexeme":"student","line":2,"type":"IDENTIFIER"},{"column":20,"lexeme":"(","line":2,"type":"DELIMITER"},{"column":21,"lexeme":"id","line":2,"type":"IDENTIFIER"},{"column":23,"lexeme":",","line":2,"type":"DELIMITER"},{"column":25,"lexeme":"name","line":2,"type":"IDENTIFIER"},{"column":29,"lexeme":")","line":2,"type":"DELIMITER"},{"column":31,"lexeme":"VALUES","line":2,"type":"KEYWORD"},{"column":37,"lexeme":"(","line":2,"type":"DELIMITER"},{"column":38,"lexeme":"1","line":2,"type":"CONST"},{"column":39,"lexeme":",","line":2,"type":"DELIMITER"},{"column":41,"lexeme":"'Ada'","line":2,"type":"CONST"},{"column":46,"lexeme":")","line":2,"type":"DELIMITER"},{"column":47,"lexeme":";","line":2,"type":"DELIMITER"},{"column":48,"lexeme":"","line":2,"type":"EOF"}]
+AST: [{"column":1,"columns":["id","name"],"line":2,"node":"InsertStmt","table":"student","values":[{"column":38,"line":2,"lit_type":"INT","node":"LiteralExpr","value":1},{"column":41,"line":2,"lit_type":"VARCHAR","node":"LiteralExpr","value":"Ada"}]}]
+SEMANTIC: OK
+PLAN: {"columns":["id","name"],"op":"Insert","table":"student","values":[1,"Ada"]}
+OPT_PLAN: {"columns":["id","name"],"op":"Insert","table":"student","values":[1,"Ada"]}
+RESULT: 1 row inserted
+TOKENS: [{"column":1,"lexeme":"INSERT","line":3,"type":"KEYWORD"},{"column":8,"lexeme":"INTO","line":3,"type":"KEYWORD"},{"column":13,"lexeme":"student","line":3,"type":"IDENTIFIER"},{"column":20,"lexeme":"(","line":3,"type":"DELIMITER"},{"column":21,"lexeme":"name","line":3,"type":"IDENTIFIER"},{"column":25,"lexeme":",","line":3,"type":"DELIMITER"},{"column":27,"lexeme":"id","line":3,"type":"IDENTIFIER"},{"column":29,"lexeme":")","line":3,"type":"DELIMITER"},{"column":31,"lexeme":"VALUES","line":3,"type":"KEYWORD"},{"column":37,"lexeme":"(","line":3,"type":"DELIMITER"},{"column":38,"lexeme":"'Bob'","line":3,"type":"CONST"},{"column":43,"lexeme":",","line":3,"type":"DELIMITER"},{"column":45,"lexeme":"2","line":3,"type":"CONST"},{"column":46,"lexeme":")","line":3,"type":"DELIMITER"},{"column":47,"lexeme":";","line":3,"type":"DELIMITER"},{"column":48,"lexeme":"","line":3,"type":"EOF"}]
+AST: [{"column":1,"columns":["name","id"],"line":3,"node":"InsertStmt","table":"student","values":[{"column":38,"line":3,"lit_type":"VARCHAR","node":"LiteralExpr","value":"Bob"},{"column":45,"line":3,"lit_type":"INT","node":"LiteralExpr","value":2}]}]
+SEMANTIC: OK
+PLAN: {"columns":["name","id"],"op":"Insert","table":"student","values":["Bob",2]}
+OPT_PLAN: {"columns":["name","id"],"op":"Insert","table":"student","values":["Bob",2]}
+RESULT: 1 row inserted
+TOKENS: [{"column":1,"lexeme":"SELECT","line":4,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":4,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":4,"type":"KEYWORD"},{"column":15,"lexeme":"student","line":4,"type":"IDENTIFIER"},{"column":22,"lexeme":";","line":4,"type":"DELIMITER"},{"column":23,"lexeme":"","line":4,"type":"EOF"}]
+AST: [{"column":1,"columns":"*","line":4,"node":"SelectStmt","table":"student","where":null}]
+SEMANTIC: OK
+PLAN: {"child":{"op":"SeqScan","table":"student"},"columns":"*","op":"Project"}
+OPT_PLAN: {"child":{"op":"SeqScan","table":"student"},"columns":"*","op":"Project"}
+COLUMNS: ["id","name"]
+ROW: [1,"Ada"]
+ROW: [2,"Bob"]
+RESULT: 2 rows selected
+TOKENS: [{"column":1,"lexeme":"SELECT","line":5,"type":"KEYWORD"},{"column":8,"lexeme":"name","line":5,"type":"IDENTIFIER"},{"column":13,"lexeme":"FROM","line":5,"type":"KEYWORD"},{"column":18,"lexeme":"student","line":5,"type":"IDENTIFIER"},{"column":26,"lexeme":"WHERE","line":5,"type":"KEYWORD"},{"column":32,"lexeme":"id","line":5,"type":"IDENTIFIER"},{"column":35,"lexeme":"=","line":5,"type":"OPERATOR"},{"column":37,"lexeme":"2","line":5,"type":"CONST"},{"column":38,"lexeme":";","line":5,"type":"DELIMITER"},{"column":39,"lexeme":"","line":5,"type":"EOF"}]
+AST: [{"column":1,"columns":["name"],"line":5,"node":"SelectStmt","table":"student","where":{"column":35,"left":{"column":32,"line":5,"name":"id","node":"IdentifierExpr"},"line":5,"node":"BinaryExpr","op":"=","right":{"column":37,"line":5,"lit_type":"INT","node":"LiteralExpr","value":2}}}]
+SEMANTIC: OK
+PLAN: {"child":{"child":{"op":"SeqScan","table":"student"},"op":"Filter","predicate":{"column":35,"left":{"column":32,"line":5,"name":"id","node":"IdentifierExpr"},"line":5,"node":"BinaryExpr","op":"=","right":{"column":37,"line":5,"lit_type":"INT","node":"LiteralExpr","value":2}}},"columns":["name"],"op":"Project"}
+OPT_PLAN: {"child":{"child":{"op":"SeqScan","table":"student"},"op":"Filter","predicate":{"column":35,"left":{"column":32,"line":5,"name":"id","node":"IdentifierExpr"},"line":5,"node":"BinaryExpr","op":"=","right":{"column":37,"line":5,"lit_type":"INT","node":"LiteralExpr","value":2}}},"columns":["name"],"op":"Project"}
+COLUMNS: ["name"]
+ROW: ["Bob"]
+RESULT: 1 row selected
+TOKENS: [{"column":1,"lexeme":"DELETE","line":6,"type":"KEYWORD"},{"column":8,"lexeme":"FROM","line":6,"type":"KEYWORD"},{"column":13,"lexeme":"student","line":6,"type":"IDENTIFIER"},{"column":21,"lexeme":"WHERE","line":6,"type":"KEYWORD"},{"column":27,"lexeme":"id","line":6,"type":"IDENTIFIER"},{"column":30,"lexeme":"=","line":6,"type":"OPERATOR"},{"column":32,"lexeme":"1","line":6,"type":"CONST"},{"column":33,"lexeme":";","line":6,"type":"DELIMITER"},{"column":34,"lexeme":"","line":6,"type":"EOF"}]
+AST: [{"column":1,"line":6,"node":"DeleteStmt","table":"student","where":{"column":30,"left":{"column":27,"line":6,"name":"id","node":"IdentifierExpr"},"line":6,"node":"BinaryExpr","op":"=","right":{"column":32,"line":6,"lit_type":"INT","node":"LiteralExpr","value":1}}}]
+SEMANTIC: OK
+PLAN: {"child":{"child":{"op":"SeqScan","table":"student"},"op":"Filter","predicate":{"column":30,"left":{"column":27,"line":6,"name":"id","node":"IdentifierExpr"},"line":6,"node":"BinaryExpr","op":"=","right":{"column":32,"line":6,"lit_type":"INT","node":"LiteralExpr","value":1}}},"op":"Delete","table":"student"}
+OPT_PLAN: {"child":{"child":{"op":"SeqScan","table":"student"},"op":"Filter","predicate":{"column":30,"left":{"column":27,"line":6,"name":"id","node":"IdentifierExpr"},"line":6,"node":"BinaryExpr","op":"=","right":{"column":32,"line":6,"lit_type":"INT","node":"LiteralExpr","value":1}}},"op":"Delete","table":"student"}
+RESULT: 1 row deleted
+TOKENS: [{"column":1,"lexeme":"SELECT","line":7,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":7,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":7,"type":"KEYWORD"},{"column":15,"lexeme":"student","line":7,"type":"IDENTIFIER"},{"column":22,"lexeme":";","line":7,"type":"DELIMITER"},{"column":23,"lexeme":"","line":7,"type":"EOF"}]
+AST: [{"column":1,"columns":"*","line":7,"node":"SelectStmt","table":"student","where":null}]
+SEMANTIC: OK
+PLAN: {"child":{"op":"SeqScan","table":"student"},"columns":"*","op":"Project"}
+OPT_PLAN: {"child":{"op":"SeqScan","table":"student"},"columns":"*","op":"Project"}
+COLUMNS: ["id","name"]
+ROW: [2,"Bob"]
+RESULT: 1 row selected
+EXIT: 0
