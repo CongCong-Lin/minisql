@@ -15,6 +15,7 @@ MODULES = [
     "storage.file_manager", "storage.record", "storage.storage_engine",
     "engine.executor", "engine.evaluator", "engine.runtime",
     "utils.results", "cli.main", "tools.case_runner",
+    "sql_compiler.query_binding", "engine.relational", "engine.query_numbers",
 ]
 
 

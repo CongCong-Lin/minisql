@@ -46,11 +46,12 @@ def _optimize_plan(node: dict, log: _RuleLog) -> tuple[dict, bool]:
     """先优化子计划，再处理当前 Filter。"""
     changed = False
     result = dict(node)
-    child = result.get("child")
-    if isinstance(child, dict) and "op" in child:
-        new_child, child_changed = _optimize_plan(child, log)
-        result["child"] = new_child
-        changed = changed or child_changed
+    for edge in ("child", "left", "right"):
+        child = result.get(edge)
+        if isinstance(child, dict) and "op" in child:
+            new_child, child_changed = _optimize_plan(child, log)
+            result[edge] = new_child
+            changed = changed or child_changed
     if result.get("op") == "Filter":
         new_pred, pred_changed = _optimize_expr(result["predicate"], log)
         result["predicate"] = new_pred

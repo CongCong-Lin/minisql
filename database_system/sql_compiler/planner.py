@@ -1,7 +1,7 @@
 """D 负责：单条已检查 AST 转 JSON 兼容计划。"""
 
 from sql_compiler.ast_nodes import (
-    CreateTableStmt, DeleteStmt, InsertStmt, SelectStmt, Stmt,
+    CreateTableStmt, DeleteStmt, InsertStmt, SelectStmt, Stmt, UpdateStmt,
 )
 from sql_compiler.catalog import Catalog
 from sql_compiler.errors import PlannerError
@@ -32,6 +32,12 @@ def plan(stmt: Stmt, catalog: Catalog) -> dict:
             "values": [literal.value for literal in stmt.values],
         }
     if isinstance(stmt, SelectStmt):
+        if stmt.binding is not None:
+            from sql_compiler.query_binding import query_plan
+            return query_plan(stmt.binding)
+        from sql_compiler.query_binding import is_extended_query
+        if is_extended_query(stmt):
+            raise PlannerError(stmt.line, stmt.column, "extended query requires semantic binding")
         return {
             "op": "Project",
             "columns": stmt.columns if stmt.columns == "*" else list(stmt.columns),
@@ -43,6 +49,16 @@ def plan(stmt: Stmt, catalog: Catalog) -> dict:
             "table": stmt.table,
             "child": _scan_with_filter(stmt.table, stmt.where),
         }
+    if isinstance(stmt, UpdateStmt):
+        from copy import deepcopy
+        if stmt.binding is None:
+            raise PlannerError(stmt.line, stmt.column, "UPDATE requires semantic binding")
+        binding = stmt.binding
+        child = {"op": "SeqScan", "table": binding["table"]}
+        if binding["where"] is not None:
+            child = {"op": "Filter", "predicate": deepcopy(binding["where"]), "child": child}
+        return {"op": "Update", "table": binding["table"],
+                "assignments": deepcopy(binding["assignments"]), "child": child}
     raise PlannerError(
         stmt.line, stmt.column,
         f"unsupported statement: {type(stmt).__name__}",

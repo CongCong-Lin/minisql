@@ -2,7 +2,7 @@
 
 from sql_compiler.ast_nodes import (
     BinaryExpr, CreateTableStmt, DeleteStmt, Expr, IdentifierExpr, InsertStmt,
-    LiteralExpr, SelectStmt, Stmt, UnaryExpr,
+    LiteralExpr, SelectStmt, Stmt, UnaryExpr, UpdateStmt,
 )
 from sql_compiler.catalog import Catalog
 from sql_compiler.errors import SemanticError
@@ -51,6 +51,8 @@ def _expression(expr: Expr, table: str, catalog: Catalog) -> str:
                 raise _error(current, f"未知字面量类型：{current.lit_type}")
             result = current.lit_type
         elif isinstance(current, IdentifierExpr):
+            if current.qualifier is not None and current.qualifier.lower() != table.lower():
+                raise _error(current, f"列不存在：{current.qualifier}.{current.name}")
             result = catalog.get_type(table, current.name)
             if result is None:
                 raise _error(current, f"列不存在：{current.name}")
@@ -75,6 +77,17 @@ def _expression(expr: Expr, table: str, catalog: Catalog) -> str:
 def analyze(stmts: list[Stmt], catalog: Catalog) -> list[Stmt]:
     """基于同一个目录逐句检查；顺序建表可见性由运行时编排。"""
     for stmt in stmts:
+        if isinstance(stmt, UpdateStmt):
+            from sql_compiler.query_binding import bind_update
+            stmt.binding = None
+            stmt.binding = bind_update(stmt, catalog)
+            continue
+        if isinstance(stmt, SelectStmt):
+            from sql_compiler.query_binding import bind_query, is_extended_query
+            stmt.binding = None
+            if is_extended_query(stmt):
+                stmt.binding = bind_query(stmt, catalog)
+                continue
         if not isinstance(stmt, (CreateTableStmt, InsertStmt, SelectStmt, DeleteStmt)):
             raise _error(stmt, "不支持的语句节点")
         if stmt.table.lower() == "__catalog__":

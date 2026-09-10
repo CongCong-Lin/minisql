@@ -1,0 +1,4 @@
+CREATE TABLE t(a INT, b INT);
+INSERT INTO t(a,b) VALUES(1,2);
+UPDATE t SET a=b,b=a;
+SELECT * FROM t;

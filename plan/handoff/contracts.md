@@ -1,10 +1,12 @@
-# 《大型平台软件设计实习》公共契约（定稿 v1.5）
+# 《大型平台软件设计实习》公共契约（v1.6）
 
 > 本文档是四人开发的唯一权威接口标准，适用于 SQL 编译器、页式存储、数据库系统三个阶段。
-> 制定日期：2026-09-07；本次修订：2026-09-08。配套：[四人分工](team_plan.md)、[任务交接](handoff.md)。
-> 本版按已确认的 v1.5 方案完成文档定稿，不代表源码实现或四人会签已经完成。后续发现缺口可以提出修订；契约变更须通过 PR、四人全部批准并递增版本，再修改实现。
+> 制定日期：2026-09-07；本次修订：2026-09-10。配套：[四人分工](team_plan.md)、[任务交接](handoff.md)。
+> v1.5 是基础开发冻结版。v1.6 按用户确认的独立扩展计划实现 UPDATE、排序、内连接、聚合；数据库由当前负责人维护，UI 同伴在独立分支开发后再合并。本次修订不代表原四人会签已经发生。
 
 修订记录：v1.1 补充错误与优化规则；v1.2 补充存储及执行接口；v1.3 增加 `run()`；v1.4 对齐词法条款、补充 Token/AST 结果及审批规则；v1.5 统一异常身份、语句恢复、目录提交时点、表级存储接口、物理布局、系统目录、命令行输出和验收边界。
+
+v1.6 增加查询作用域、列绑定、UPDATE／ORDER BY／INNER JOIN／GROUP BY／HAVING 和查询结果类型，见 §11。旧基础 AST、结果外层字段和磁盘格式保持兼容；§3—§9 中未特别说明的 AST／计划描述为基础形式，扩展形式以 §11 为准。
 
 ## 1. 语言与词法规则
 
@@ -19,7 +21,8 @@ INT VARCHAR TRUE FALSE
 ```
 
 - 全部保留，关键字匹配大小写不敏感；标识符不得与关键字重名。
-- UPDATE、SET、ORDER、BY、GROUP、JOIN、NULL 必须识别为关键字，由 Parser 拒绝不支持的语法。NULL 不进入语义阶段。
+- UPDATE、SET、ORDER、BY、GROUP、JOIN 识别为保留关键字并支持 §2.1 的扩展语法。NULL 输入仍由 Parser 拒绝，不进入语义阶段。
+- AS、INNER、ON、HAVING、ASC、DESC、COUNT、SUM、AVG、MIN、MAX 为上下文词，不增加全局保留字；旧表列名继续合法。
 - 表名、列名比较统一使用 `.lower()`。Lexer 和 AST 保留原文；Catalog 保留首次注册的大小写用于展示，物理表映射保存小写名称。执行器查列也按小写比较。
 - 字符串内容保持原样，不做大小写归一化。
 
@@ -51,7 +54,7 @@ TokenType 使用枚举名称区分类别，不为每个关键字或常量另建�
 | 浮点数 | `[0-9]+\.[0-9]+`，不支持指数或省略小数点两侧数字 |
 | 字符串 | 单引号包围，两个连续单引号 `''` 表示字面单引号 |
 | 运算符 | `= != > >= < <= + - * /`，不支持 `==` |
-| 分隔符 | `( ) , ;` |
+| 分隔符 | `( ) , ; .`，点号不改变完整数字词素的识别规则 |
 
 - 注释包括 `--` 到行尾和非嵌套的 `/* ... */`；注释不产生 Token。
 - 输入先把 `\r\n`、`\r` 转成 `\n`，再计算位置。空格、制表符均推进一列；换行推进行号并把列号重置为 1。列号按字符计，不按 UTF-8 字节计。
@@ -80,7 +83,7 @@ B 的 `grammar.md` 在 Parser 完成时复制本节 EBNF。代码必须与文法
 ```ebnf
 program        -> statement_list EOF ;
 statement_list -> { statement } ;
-statement      -> create_stmt | insert_stmt | select_stmt | delete_stmt ;
+statement      -> create_stmt | insert_stmt | select_stmt | delete_stmt | update_stmt ;
 
 create_stmt    -> CREATE TABLE IDENTIFIER '(' column_def { ',' column_def } ')' ';' ;
 column_def     -> IDENTIFIER type ;
@@ -91,11 +94,25 @@ id_list        -> IDENTIFIER { ',' IDENTIFIER } ;
 value_list     -> literal { ',' literal } ;
 literal        -> INTEGER_CONST | FLOAT_CONST | STRING_CONST | TRUE | FALSE ;
 
-select_stmt    -> SELECT select_list FROM IDENTIFIER where_opt ';' ;
-select_list    -> '*' | IDENTIFIER { ',' IDENTIFIER } ;
-where_opt      -> WHERE expression | ε ;
+select_stmt    -> SELECT select_list FROM table_ref { join_clause }
+                 where_opt group_opt having_opt order_opt ';' ;
+select_list    -> select_item { ',' select_item } ;
+select_item    -> '*' | IDENTIFIER '.' '*' | select_expr [ AS IDENTIFIER ] ;
+select_expr    -> column_ref | aggregate ;
+column_ref     -> IDENTIFIER [ '.' IDENTIFIER ] ;
+aggregate      -> aggregate_name '(' ( column_ref | '*' ) ')' ;
+aggregate_name -> COUNT | SUM | AVG | MIN | MAX ;
+table_ref      -> IDENTIFIER [ [ AS ] IDENTIFIER ] ;
+join_clause    -> [ INNER ] JOIN table_ref ON expression ;
+where_opt      -> [ WHERE expression ] ;
+group_opt      -> [ GROUP BY column_ref { ',' column_ref } ] ;
+having_opt     -> [ HAVING expression ] ;
+order_opt      -> [ ORDER BY order_item { ',' order_item } ] ;
+order_item     -> select_expr [ ASC | DESC ] ;
 
 delete_stmt    -> DELETE FROM IDENTIFIER where_opt ';' ;
+update_stmt    -> UPDATE IDENTIFIER SET assignment { ',' assignment } where_opt ';' ;
+assignment     -> IDENTIFIER '=' expression ;
 
 expression     -> or_expr ;
 or_expr        -> and_expr { OR and_expr } ;
@@ -105,12 +122,12 @@ comparison     -> arith_expr [ comp_op arith_expr ] ;
 comp_op        -> '=' | '!=' | '>' | '>=' | '<' | '<=' ;
 arith_expr     -> term { ('+' | '-') term } ;
 term           -> factor { ('*' | '/') factor } ;
-factor         -> IDENTIFIER | literal | '(' expression ')' ;
+factor         -> column_ref | aggregate | literal | '(' expression ')' ;
 ```
 
-- 必做 CREATE TABLE、INSERT、SELECT（含 WHERE）、DELETE，以及算术、TRUE/FALSE、NOT。
+- 基础支持 CREATE TABLE、INSERT、SELECT（含 WHERE）、DELETE，以及算术、TRUE/FALSE、NOT；v1.6 增加 UPDATE、ORDER BY、INNER JOIN、GROUP BY、常用聚合和 HAVING。
 - 优先级从高到低：**括号、乘除、加减、比较、NOT、AND、OR**；同级算术左结合。`NOT a = 1` 为 `NOT(a=1)`。
-- 不支持一元正负号、NULL、默认值、SELECT 列表表达式或 VARCHAR 长度参数。负数可由 `0 - 3` 等表达式产生。
+- 不支持一元正负号、NULL 输入、默认值、普通 SELECT 列表算术表达式或 VARCHAR 长度参数。负数可由 `0 - 3` 等表达式产生。SELECT 列表允许列、星号和聚合，聚合参数限列引用，只有 COUNT 允许星号。
 - 不支持的保留语法在 Parser 报错。NULL 的附加原因固定包含 `NULL is not supported`；其他扩展语法包含 `statement not supported: <关键字>`，位置指实际遇到的不支持关键字。仍保留 §3.1 的 unexpected/expected 诊断。
 - 空文件、空白和完整注释输入合法，返回空列表；单独 `;` 不是空语句，报语法错误。
 
@@ -149,7 +166,7 @@ SELECT * FROM t3;
 
 ### 3.1 递归下降及诊断集合
 
-B 实现 `parse(tokens: list[Token]) -> list[Stmt]`，采用单 Token lookahead 的递归下降，每个非终结符一个解析函数。输入允许多个完整语句；第一个语法错误即抛 `ParserError`。跨错误继续执行是 `run()` 的职责。
+`parse(tokens: list[Token]) -> list[Stmt]` 使用递归下降；基础分支采用单 Token lookahead，聚合调用与限定星号使用有限的额外前瞻。输入允许多个完整语句；第一个语法错误即抛 `ParserError`。跨错误继续执行是 `run()` 的职责。
 
 - `peek()` 不消费，`advance()` 消费，`expect(type, lexeme?)` 失败时不消费当前 Token。
 - 非终结符入口无法选择分支：expected 取该非终结符的 FIRST 集。
@@ -402,7 +419,7 @@ class StmtResult:
 
 Python 3.11+，仅标准库及 pytest；requirements.txt 只有 pytest。不引入第三方解析/编译库。函数采用 snake_case，每个公共函数有中文 docstring。
 
-工程目录为 `database_system/`，运行命令以该目录为工作目录；M1 已建立目录、公共类型、接口存根和最小契约测试，业务算法仍待实现。具体进度见 [工程说明](../../database_system/README.md)，下列接口要求仍是后续实现基线。
+工程目录为 `database_system/`，运行命令以该目录为工作目录；基础业务已经集成，v1.6 在此基础上扩展。具体进度见 [工程说明](../../database_system/README.md) 和 [扩展验证记录](../../database_system/docs/extensions_validation.md)。
 
 ```text
 database_system/
@@ -595,6 +612,8 @@ class StorageEngine:
     def scan_records(self, table: str, columns: list[ColumnDef]
                      ) -> Iterator[tuple[RecordId, tuple]]: ...
     def delete_record(self, table: str, rid: RecordId) -> None: ...
+    def update_record(self, table: str, rid: RecordId, row: tuple,
+                      columns: list[ColumnDef]) -> RecordId: ...
     def flush(self) -> None: ...
     def close(self) -> None: ...
 ```
@@ -603,6 +622,7 @@ class StorageEngine:
 - insert_record 先校验并序列化，再向表尾页追加，空间不足则分配并连接新尾页。不复用删除槽。
 - scan_records 按表链顺序、槽号递增，跳过墓碑，返回 `(RecordId, tuple)`。RID 是内部定位信息，不进入最终查询行。
 - delete_record 验证 RID 属于目标表且槽有效，然后标记墓碑；重复删除已删除槽无额外作用。无效 RID 抛 ExecuteError。
+- update_record 先校验编码和 RID；长度不增长时原槽覆盖并更新长度，否则先插入新行再删除旧槽，返回新 RID。已删除槽不能更新。调用方必须先计算并预检完整更新目标集，不能一边扫描一边迁移更新。
 - 页链越界、循环、页头与实际页号不符或损坏槽均报 ExecuteError。数据页解析由 B 负责，C 仅提供字节和缓存。
 - flush 委托 pages.flush_all；close 委托 pages.close，可重复调用。D 不绕过 StorageEngine 修改页头、槽和表映射。
 
@@ -614,6 +634,7 @@ D 实现 `execute(plan: dict, catalog: Catalog, storage: StorageEngine) -> Execu
 | Insert | `1 row inserted` |
 | SELECT | `N row selected`（N=1），其他为 `N rows selected` |
 | Delete | `N row deleted`（N=1），其他为 `N rows deleted` |
+| Update | `N row updated`（N=1），其他为 `N rows updated`；N 为匹配行数 |
 
 ### 9.4.1 顶层编排及生命周期
 
@@ -687,8 +708,52 @@ D 在 `engine/evaluator.py` 实现 `evaluate(expr: dict, row: tuple, columns: li
 
 ## 10. 定稿范围与后续交付
 
-v1.5 固定本文件列出的接口和行为，详细分工以 [team_plan.md](team_plan.md) 为准；交接摘要不能覆盖或重定义契约。
+v1.6 保持基础接口和磁盘格式，并增加 §11 扩展。基础阶段的分工以 [team_plan.md](team_plan.md) 为准；交接摘要不能覆盖或重定义契约。
 
-M1 已按 §8.1 建立模块、公共类型和存根，最小契约测试验证导入、签名、异常身份、快照及测试替身流水线。真实数据库算法、课程 SQL 验收用例与实践报告在后续里程碑完成；M1 测试通过不等于完整数据库验收通过。
+M1 的导入、签名、异常身份与结构快照检查保留；基础数据库已经完成集成回归，扩展以真实模块与独立数据库进行验收。实践报告、UI 分支合并和现场答辩按后续交付安排完成。
 
 最终交付包括模块化源码、README、运行说明、与 §2.1 一致的 grammar.md、AST/Catalog/Plan 及物理格式说明、测试结果与失败案例分析、实践报告和 AI 辅助使用说明。每位成员必须能说明自己模块的数据流、函数职责和现场修改方法。
+
+## 11. v1.6 独立扩展
+
+本节是基础条款的增量规范，适用于用户已授权独立完成的 UPDATE、ORDER BY、INNER JOIN、GROUP BY 和 HAVING。详细示例、数据流和 UI 交接见 [扩展说明](../../database_system/docs/extensions.md)。
+
+### 11.1 查询作用域与结构
+
+- SelectStmt 保留原字段并增加可选 items、alias、joins、order_by、group_by、having。SelectItem 保存表达式或星号及结果别名；JoinClause 保存右表、别名及 ON；OrderItem 保存表达式和方向。IdentifierExpr 可带 qualifier，AggregateExpr 保存函数名和列参数，COUNT(*) 的参数为空。
+- UPDATE 使用 UpdateStmt(table,assignments,where)，Assignment 保存目标列和右侧表达式。所有新语法节点保留行列。
+- 未使用的扩展字段不进入旧 AST 输出；语义绑定、位置索引和类型标注不进入 AST 快照。基础 SELECT 继续使用原始 AST／计划形式。
+- 查询作用域按 FROM 和 JOIN 顺序建立。表别名替代原表名作为限定名，禁止重复限定名；未限定列必须唯一。每个 ON 只能引用当时已经引入的表。系统目录不能作为任意查询来源。
+- 扩展计划的 BoundColumnExpr 保存 index、value_type、line、column，按输入行内位置求值，不再根据结果表头查找。新 SelectItem 的名称错误使用对应节点位置，基础字符串列列表维持原定位方式。
+
+### 11.2 关系算子
+
+- 扩展 SeqScan 增加 output 列描述；NestedLoopJoin 使用 left／right 和 predicate，嵌套循环按书写顺序执行，不去重、不重排连接。
+- Filter 保留原形式。Aggregate 保存 keys、aggregates、child；输出位置为分组键在前、聚合项在后。Sort 保存 keys(expr,descending)、child；最终 Project 的 items 保存 expr、label。旧 Project(columns,child) 继续支持。
+- 顺序为扫描／连接、WHERE、聚合、HAVING、排序、最终投影。内部结果同时保存列结构及行集合，空结果仍有完整表头。
+- ORDER BY 支持多个键，默认 ASC，同键保持输入顺序。排序键只允许列、限定列、结果别名及聚合项；非分组查询允许未投影来源列作为排序键。字符串按 Unicode 码点；空值升序在前，降序在后。
+- SELECT 星号按来源顺序展开，限定星号仅展开该来源。连接查询未指定结果别名时表头使用限定名称，普通单表结果保持原列名。
+- 优化器访问 child／left／right，不跨连接、聚合或排序移动条件；常量折叠与布尔化简必须保持可观察结果及执行错误等价。
+
+### 11.3 更新
+
+- 支持单表、多列赋值与可选 WHERE；目标列存在且唯一，所有右侧表达式读取更新前原行，类型必须与磁盘列精确匹配。
+- 执行器先收集目标、求值并序列化预检全部新行，再逐一 update_record，成功后 flush。表达式、类型、长度或记录容量错误发生时尚未修改任何目标。
+- 匹配行都计数，包括值未改变的行；零匹配返回 0 rows updated。物理迁移可能改变无 ORDER BY 查询顺序。
+- 继续采用正常完成和正常关闭的持久化保证，不增加 I/O 故障回滚、事务或文件格式迁移。
+
+### 11.4 聚合及结果类型
+
+- 支持多列 GROUP BY、COUNT(*)／COUNT(column)、SUM、AVG、MIN、MAX。后四者参数限列，SUM／AVG 仅接受 INT，MIN／MAX 接受 INT 或 VARCHAR；禁止聚合嵌套和 DISTINCT 参数。
+- 无分组键的聚合针对全表；空输入返回一行，COUNT 为 0，其他聚合为 None。带分组键的空输入返回零行。重复聚合表达式共享计算结果。
+- COUNT／SUM 使用有符号 64 位查询结果整数，AVG 使用有限浮点结果，MIN／MAX 保持列类型。AVG 中间和可用 Python 整数。聚合后的整数运算向零截断并检查 64 位范围，浮点运算结果必须有限。
+- GROUP BY 或聚合存在时，SELECT／HAVING／ORDER BY 的所有非聚合列必须属于分组键；WHERE／ON／UPDATE 不允许聚合。HAVING 必须用于分组或聚合并产生 BOOL。
+- HAVING／ORDER BY 可以引用结果别名；别名与来源列同名时必须报歧义，禁止静默优先绑定。结果别名不能重复，GROUP BY 不使用结果别名。
+- 空值只在查询结果中产生。比较任一侧为空得到未知，NOT 未知仍为未知；未知 AND FALSE 为假、未知 OR TRUE 为真，其余按三值逻辑；条件只保留真值。算术任一侧为空返回空值。AND／OR 仍从左到右短路。
+- ExecuteResult 的 rows／columns／message 和 StmtResult 的外层字段不变；JSON 输出宽整数、有限数值或 null。磁盘列仍只允许 INT／VARCHAR，普通整数表达式仍按 32 位规则执行。
+
+### 11.5 UI 与验收
+
+- open_database／run／close_database／compile_sql 及 UI 已使用的 _scan_and_segment／_compile_segment 保持签名和返回约定。纯编译及实时检查不执行 UPDATE。
+- UI 由同伴在独立分支维护，最终合并后验证新算子树、结果别名、空值、实时错误定位和更新结果。不在数据库扩展中修改 UI 文件。
+- 测试覆盖每项功能、组合查询、异常恢复、旧数据库重启与优化等价。SQL 用例配完整预期；演示脚本使用独立数据库且核对结果。实际执行证据见 [验证记录](../../database_system/docs/extensions_validation.md)。

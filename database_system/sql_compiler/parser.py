@@ -4,6 +4,7 @@ import math
 from sql_compiler.ast_nodes import (
     BinaryExpr, ColumnDef, CreateTableStmt, DeleteStmt, IdentifierExpr,
     InsertStmt, LiteralExpr, SelectStmt, Stmt, UnaryExpr,
+    AggregateExpr, Assignment, JoinClause, OrderItem, SelectItem, UpdateStmt,
 )
 from sql_compiler.errors import ParserError
 from sql_compiler.lexer import Token, TokenType
@@ -15,7 +16,7 @@ def parse(tokens: list[Token]) -> list[Stmt]:
 
 
 class _Parser:
-    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT"}
+    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT", "UPDATE"}
     FIRST_FACTOR = {"IDENTIFIER", "CONST", "'('"}
 
     def __init__(self, tokens: list[Token]) -> None:
@@ -55,13 +56,32 @@ class _Parser:
             return self.advance()
         return None
 
+    def is_word(self, word: str) -> bool:
+        """扩展词按语境识别，避免将旧列名升级为全局保留字。"""
+        token = self.peek()
+        return token.type in {TokenType.KEYWORD, TokenType.IDENTIFIER} and token.lexeme.upper() == word
+
+    def match_word(self, word: str) -> Token | None:
+        return self.advance() if self.is_word(word) else None
+
+    def expect_word(self, word: str) -> Token:
+        if not self.is_word(word):
+            self._error({word})
+        return self.advance()
+
+    def match_delimiter(self, value: str) -> bool:
+        if self.peek().type is TokenType.DELIMITER and self.peek().lexeme == value:
+            self.advance()
+            return True
+        return False
+
     def parse(self) -> list[Stmt]:
         result = []
         while self.peek().type is not TokenType.EOF:
             if self.peek().type is not TokenType.KEYWORD or self.peek().lexeme.upper() not in self.FIRST_STATEMENT:
                 token = self.peek()
                 unsupported = token.lexeme.upper() if token.type is TokenType.KEYWORD else None
-                self._error({"CREATE", "DELETE", "INSERT", "SELECT"}, token,
+                self._error(self.FIRST_STATEMENT, token,
                             f"statement not supported: {unsupported}" if unsupported else "")
             result.append(self.statement())
         return result
@@ -71,6 +91,7 @@ class _Parser:
         if word == "CREATE": return self.create_stmt()
         if word == "INSERT": return self.insert_stmt()
         if word == "SELECT": return self.select_stmt()
+        if word == "UPDATE": return self.update_stmt()
         return self.delete_stmt()
 
     def identifier(self) -> Token:
@@ -123,15 +144,129 @@ class _Parser:
 
     def select_stmt(self) -> SelectStmt:
         start = self.expect(TokenType.KEYWORD, "SELECT")
-        if self.peek().type is TokenType.OPERATOR and self.peek().lexeme == "*":
-            self.advance(); columns = "*"
-        else:
-            columns = [t.lexeme for t in self.id_list()]
+        items = [self.select_item()]
+        while self.match_delimiter(","):
+            items.append(self.select_item())
         self.expect(TokenType.KEYWORD, "FROM")
         table = self.identifier()
+        alias = self.table_alias()
+        joins = []
+        while self.is_word("INNER") or self.is_word("JOIN"):
+            join_start = self.peek()
+            self.match_word("INNER")
+            self.expect_word("JOIN")
+            right = self.identifier()
+            right_alias = self.table_alias()
+            self.expect_word("ON")
+            joins.append(JoinClause(right.lexeme, right_alias, self.expression(),
+                                    line=join_start.line, column=join_start.column))
+        where = self.where_opt()
+        group_by = []
+        if self.match_word("GROUP"):
+            self.expect_word("BY")
+            group_by.append(self.column_reference())
+            while self.match_delimiter(","):
+                group_by.append(self.column_reference())
+        having = self.expression() if self.match_word("HAVING") else None
+        order_by = []
+        if self.match_word("ORDER"):
+            self.expect_word("BY")
+            while True:
+                token = self.peek()
+                expr = self.column_or_aggregate()
+                descending = bool(self.match_word("DESC"))
+                if not descending:
+                    self.match_word("ASC")
+                order_by.append(OrderItem(expr, descending, line=token.line, column=token.column))
+                if not self.match_delimiter(","):
+                    break
+        self.expect(TokenType.DELIMITER, ";")
+        # 基础语句保持原有 AST 形状和公开构造方式。
+        if len(items) == 1 and items[0].expr is None and items[0].qualifier is None:
+            columns, extended = "*", []
+        elif all(isinstance(item.expr, IdentifierExpr) and item.expr.qualifier is None
+                 and item.alias is None for item in items):
+            columns, extended = [item.expr.name for item in items], []
+        else:
+            columns, extended = [], items
+        stmt = SelectStmt(columns, table.lexeme, where, items=extended, alias=alias,
+                          joins=joins, group_by=group_by, having=having, order_by=order_by,
+                          line=start.line, column=start.column)
+        stmt.selection_items = items
+        return stmt
+
+    def table_alias(self) -> str | None:
+        """显式别名可使用软关键字，隐式别名避开后续子句起点。"""
+        if self.match_word("AS"):
+            return self.identifier().lexeme
+        blocked = {"INNER", "ON", "HAVING", "LEFT", "RIGHT", "FULL", "CROSS",
+                   "NATURAL", "USING", "LIMIT", "UNION"}
+        if self.peek().type is TokenType.IDENTIFIER and self.peek().lexeme.upper() not in blocked:
+            return self.advance().lexeme
+        return None
+
+    def column_reference(self) -> IdentifierExpr:
+        token = self.identifier()
+        qualifier = None
+        name = token.lexeme
+        if self.match_delimiter("."):
+            qualifier, name = name, self.identifier().lexeme
+        return IdentifierExpr(name, qualifier=qualifier, line=token.line, column=token.column)
+
+    def column_or_aggregate(self):
+        token = self.peek()
+        following = self.tokens[min(self.index + 1, len(self.tokens) - 1)]
+        if (token.type is TokenType.IDENTIFIER
+                and token.lexeme.upper() in {"COUNT", "SUM", "AVG", "MIN", "MAX"}
+                and following.type is TokenType.DELIMITER and following.lexeme == "("):
+            self.advance()
+            self.advance()
+            if self.peek().type is TokenType.OPERATOR and self.peek().lexeme == "*":
+                self.advance()
+                argument = None
+            else:
+                argument = self.column_reference()
+            self.expect(TokenType.DELIMITER, ")")
+            return AggregateExpr(token.lexeme.upper(), argument, line=token.line, column=token.column)
+        return self.column_reference()
+
+    def select_item(self) -> SelectItem:
+        token = self.peek()
+        qualifier = None
+        if token.type is TokenType.OPERATOR and token.lexeme == "*":
+            self.advance()
+            expr = None
+        elif (token.type is TokenType.IDENTIFIER and self.index + 2 < len(self.tokens)
+              and self.tokens[self.index + 1].lexeme == "."
+              and self.tokens[self.index + 2].lexeme == "*"):
+            qualifier = self.advance().lexeme
+            self.advance()
+            self.advance()
+            expr = None
+        else:
+            expr = self.column_or_aggregate()
+        alias = None
+        if self.match_word("AS"):
+            if expr is None:
+                self._error({"FROM", "','"}, suffix="star cannot have an alias")
+            alias = self.identifier().lexeme
+        return SelectItem(expr, alias, qualifier, line=token.line, column=token.column)
+
+    def update_stmt(self) -> UpdateStmt:
+        start = self.expect(TokenType.KEYWORD, "UPDATE")
+        table = self.identifier()
+        self.expect(TokenType.KEYWORD, "SET")
+        assignments = []
+        while True:
+            column = self.identifier()
+            self.expect(TokenType.OPERATOR, "=")
+            assignments.append(Assignment(column.lexeme, self.expression(),
+                                           line=column.line, column=column.column))
+            if not self.match_delimiter(","):
+                break
         where = self.where_opt()
         self.expect(TokenType.DELIMITER, ";")
-        return SelectStmt(columns, table.lexeme, where, line=start.line, column=start.column)
+        return UpdateStmt(table.lexeme, assignments, where, line=start.line, column=start.column)
 
     def delete_stmt(self) -> DeleteStmt:
         start = self.expect(TokenType.KEYWORD, "DELETE")
@@ -202,7 +337,7 @@ class _Parser:
     def factor(self):
         token = self.peek()
         if token.type is TokenType.IDENTIFIER:
-            self.advance(); return IdentifierExpr(token.lexeme, line=token.line, column=token.column)
+            return self.column_or_aggregate()
         if token.type is TokenType.DELIMITER and token.lexeme == "(":
             self.advance(); value = self.expression(); self.expect(TokenType.DELIMITER, ")"); return value
         return self.literal()
