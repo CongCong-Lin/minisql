@@ -1,0 +1,2092 @@
+{
+  "contract_version": "1.6",
+  "samples": [
+    {
+      "sql": "SELECT name AS label FROM t ORDER BY id DESC;",
+      "results": [
+        {
+          "ok": true,
+          "error": null,
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "SELECT",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "name",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "AS",
+              "line": 1,
+              "column": 13
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "label",
+              "line": 1,
+              "column": 16
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "FROM",
+              "line": 1,
+              "column": 22
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 27
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "ORDER",
+              "line": 1,
+              "column": 29
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "BY",
+              "line": 1,
+              "column": 35
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 38
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "DESC",
+              "line": 1,
+              "column": 41
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 45
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 46
+            }
+          ],
+          "ast": [
+            {
+              "node": "SelectStmt",
+              "line": 1,
+              "column": 1,
+              "columns": [],
+              "table": "t",
+              "where": null,
+              "items": [
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 8,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 8,
+                    "name": "name"
+                  },
+                  "alias": "label",
+                  "qualifier": null
+                }
+              ],
+              "order_by": [
+                {
+                  "node": "OrderItem",
+                  "line": 1,
+                  "column": 38,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 38,
+                    "name": "id"
+                  },
+                  "descending": true
+                }
+              ]
+            }
+          ],
+          "plans": [
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "label"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 38
+                    },
+                    "descending": true
+                  }
+                ],
+                "child": {
+                  "op": "SeqScan",
+                  "table": "t",
+                  "output": [
+                    {
+                      "name": "id",
+                      "type": "INT",
+                      "qualifier": "t"
+                    },
+                    {
+                      "name": "name",
+                      "type": "VARCHAR",
+                      "qualifier": "t"
+                    },
+                    {
+                      "name": "team",
+                      "type": "VARCHAR",
+                      "qualifier": "t"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "label"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 38
+                    },
+                    "descending": true
+                  }
+                ],
+                "child": {
+                  "op": "SeqScan",
+                  "table": "t",
+                  "output": [
+                    {
+                      "name": "id",
+                      "type": "INT",
+                      "qualifier": "t"
+                    },
+                    {
+                      "name": "name",
+                      "type": "VARCHAR",
+                      "qualifier": "t"
+                    },
+                    {
+                      "name": "team",
+                      "type": "VARCHAR",
+                      "qualifier": "t"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "exec_result": {
+            "rows": [
+              [
+                "李四"
+              ],
+              [
+                "张三"
+              ]
+            ],
+            "message": "2 rows selected",
+            "columns": [
+              "label"
+            ]
+          },
+          "semantic_ok": true
+        }
+      ]
+    },
+    {
+      "sql": "UPDATE t SET id=id+1 WHERE id=1;",
+      "results": [
+        {
+          "ok": true,
+          "error": null,
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "UPDATE",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "SET",
+              "line": 1,
+              "column": 10
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 14
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "=",
+              "line": 1,
+              "column": 16
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 17
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "+",
+              "line": 1,
+              "column": 19
+            },
+            {
+              "type": "CONST",
+              "lexeme": "1",
+              "line": 1,
+              "column": 20
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "WHERE",
+              "line": 1,
+              "column": 22
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 28
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "=",
+              "line": 1,
+              "column": 30
+            },
+            {
+              "type": "CONST",
+              "lexeme": "1",
+              "line": 1,
+              "column": 31
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 32
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 33
+            }
+          ],
+          "ast": [
+            {
+              "node": "UpdateStmt",
+              "line": 1,
+              "column": 1,
+              "table": "t",
+              "assignments": [
+                {
+                  "node": "Assignment",
+                  "line": 1,
+                  "column": 14,
+                  "name": "id",
+                  "value": {
+                    "node": "BinaryExpr",
+                    "line": 1,
+                    "column": 19,
+                    "op": "+",
+                    "left": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 17,
+                      "name": "id"
+                    },
+                    "right": {
+                      "node": "LiteralExpr",
+                      "line": 1,
+                      "column": 20,
+                      "value": 1,
+                      "lit_type": "INT"
+                    }
+                  }
+                }
+              ],
+              "where": {
+                "node": "BinaryExpr",
+                "line": 1,
+                "column": 30,
+                "op": "=",
+                "left": {
+                  "node": "IdentifierExpr",
+                  "line": 1,
+                  "column": 28,
+                  "name": "id"
+                },
+                "right": {
+                  "node": "LiteralExpr",
+                  "line": 1,
+                  "column": 31,
+                  "value": 1,
+                  "lit_type": "INT"
+                }
+              }
+            }
+          ],
+          "plans": [
+            {
+              "op": "Update",
+              "table": "t",
+              "assignments": [
+                {
+                  "index": 0,
+                  "expr": {
+                    "node": "BinaryExpr",
+                    "op": "+",
+                    "line": 1,
+                    "column": 19,
+                    "value_type": "INT",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 17
+                    },
+                    "right": {
+                      "node": "LiteralExpr",
+                      "line": 1,
+                      "column": 20,
+                      "value": 1,
+                      "lit_type": "INT",
+                      "value_type": "INT"
+                    }
+                  }
+                }
+              ],
+              "child": {
+                "op": "Filter",
+                "predicate": {
+                  "node": "BinaryExpr",
+                  "op": "=",
+                  "line": 1,
+                  "column": 30,
+                  "value_type": "BOOL",
+                  "left": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "INT",
+                    "line": 1,
+                    "column": 28
+                  },
+                  "right": {
+                    "node": "LiteralExpr",
+                    "line": 1,
+                    "column": 31,
+                    "value": 1,
+                    "lit_type": "INT",
+                    "value_type": "INT"
+                  }
+                },
+                "child": {
+                  "op": "SeqScan",
+                  "table": "t"
+                }
+              }
+            },
+            {
+              "op": "Update",
+              "table": "t",
+              "assignments": [
+                {
+                  "index": 0,
+                  "expr": {
+                    "node": "BinaryExpr",
+                    "op": "+",
+                    "line": 1,
+                    "column": 19,
+                    "value_type": "INT",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 17
+                    },
+                    "right": {
+                      "node": "LiteralExpr",
+                      "line": 1,
+                      "column": 20,
+                      "value": 1,
+                      "lit_type": "INT",
+                      "value_type": "INT"
+                    }
+                  }
+                }
+              ],
+              "child": {
+                "op": "Filter",
+                "predicate": {
+                  "node": "BinaryExpr",
+                  "op": "=",
+                  "line": 1,
+                  "column": 30,
+                  "value_type": "BOOL",
+                  "left": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "INT",
+                    "line": 1,
+                    "column": 28
+                  },
+                  "right": {
+                    "node": "LiteralExpr",
+                    "line": 1,
+                    "column": 31,
+                    "value": 1,
+                    "lit_type": "INT",
+                    "value_type": "INT"
+                  }
+                },
+                "child": {
+                  "op": "SeqScan",
+                  "table": "t"
+                }
+              }
+            }
+          ],
+          "exec_result": {
+            "rows": [],
+            "message": "1 row updated",
+            "columns": []
+          },
+          "semantic_ok": true
+        }
+      ]
+    },
+    {
+      "sql": "SELECT a.name,b.name FROM t a JOIN t b ON a.id=b.id ORDER BY a.name,b.name;",
+      "results": [
+        {
+          "ok": true,
+          "error": null,
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "SELECT",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 9
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "name",
+              "line": 1,
+              "column": 10
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ",",
+              "line": 1,
+              "column": 14
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 15
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 16
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "name",
+              "line": 1,
+              "column": 17
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "FROM",
+              "line": 1,
+              "column": 22
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 27
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 29
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "JOIN",
+              "line": 1,
+              "column": 31
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 36
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 38
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "ON",
+              "line": 1,
+              "column": 40
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 43
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 44
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 45
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "=",
+              "line": 1,
+              "column": 47
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 48
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 49
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 50
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "ORDER",
+              "line": 1,
+              "column": 53
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "BY",
+              "line": 1,
+              "column": 59
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 62
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 63
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "name",
+              "line": 1,
+              "column": 64
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ",",
+              "line": 1,
+              "column": 68
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 69
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 70
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "name",
+              "line": 1,
+              "column": 71
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 75
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 76
+            }
+          ],
+          "ast": [
+            {
+              "node": "SelectStmt",
+              "line": 1,
+              "column": 1,
+              "columns": [],
+              "table": "t",
+              "where": null,
+              "items": [
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 8,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 8,
+                    "name": "name",
+                    "qualifier": "a"
+                  },
+                  "alias": null,
+                  "qualifier": null
+                },
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 15,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 15,
+                    "name": "name",
+                    "qualifier": "b"
+                  },
+                  "alias": null,
+                  "qualifier": null
+                }
+              ],
+              "alias": "a",
+              "joins": [
+                {
+                  "node": "JoinClause",
+                  "line": 1,
+                  "column": 31,
+                  "table": "t",
+                  "alias": "b",
+                  "on": {
+                    "node": "BinaryExpr",
+                    "line": 1,
+                    "column": 47,
+                    "op": "=",
+                    "left": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 43,
+                      "name": "id",
+                      "qualifier": "a"
+                    },
+                    "right": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 48,
+                      "name": "id",
+                      "qualifier": "b"
+                    }
+                  }
+                }
+              ],
+              "order_by": [
+                {
+                  "node": "OrderItem",
+                  "line": 1,
+                  "column": 62,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 62,
+                    "name": "name",
+                    "qualifier": "a"
+                  },
+                  "descending": false
+                },
+                {
+                  "node": "OrderItem",
+                  "line": 1,
+                  "column": 69,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 69,
+                    "name": "name",
+                    "qualifier": "b"
+                  },
+                  "descending": false
+                }
+              ]
+            }
+          ],
+          "plans": [
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "a.name"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 4,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 15
+                  },
+                  "label": "b.name"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 1,
+                      "value_type": "VARCHAR",
+                      "line": 1,
+                      "column": 62
+                    },
+                    "descending": false
+                  },
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 4,
+                      "value_type": "VARCHAR",
+                      "line": 1,
+                      "column": 69
+                    },
+                    "descending": false
+                  }
+                ],
+                "child": {
+                  "op": "NestedLoopJoin",
+                  "left": {
+                    "op": "SeqScan",
+                    "table": "t",
+                    "output": [
+                      {
+                        "name": "id",
+                        "type": "INT",
+                        "qualifier": "a"
+                      },
+                      {
+                        "name": "name",
+                        "type": "VARCHAR",
+                        "qualifier": "a"
+                      },
+                      {
+                        "name": "team",
+                        "type": "VARCHAR",
+                        "qualifier": "a"
+                      }
+                    ]
+                  },
+                  "right": {
+                    "op": "SeqScan",
+                    "table": "t",
+                    "output": [
+                      {
+                        "name": "id",
+                        "type": "INT",
+                        "qualifier": "b"
+                      },
+                      {
+                        "name": "name",
+                        "type": "VARCHAR",
+                        "qualifier": "b"
+                      },
+                      {
+                        "name": "team",
+                        "type": "VARCHAR",
+                        "qualifier": "b"
+                      }
+                    ]
+                  },
+                  "predicate": {
+                    "node": "BinaryExpr",
+                    "op": "=",
+                    "line": 1,
+                    "column": 47,
+                    "value_type": "BOOL",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 43
+                    },
+                    "right": {
+                      "node": "BoundColumnExpr",
+                      "index": 3,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 48
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "a.name"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 4,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 15
+                  },
+                  "label": "b.name"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 1,
+                      "value_type": "VARCHAR",
+                      "line": 1,
+                      "column": 62
+                    },
+                    "descending": false
+                  },
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 4,
+                      "value_type": "VARCHAR",
+                      "line": 1,
+                      "column": 69
+                    },
+                    "descending": false
+                  }
+                ],
+                "child": {
+                  "op": "NestedLoopJoin",
+                  "left": {
+                    "op": "SeqScan",
+                    "table": "t",
+                    "output": [
+                      {
+                        "name": "id",
+                        "type": "INT",
+                        "qualifier": "a"
+                      },
+                      {
+                        "name": "name",
+                        "type": "VARCHAR",
+                        "qualifier": "a"
+                      },
+                      {
+                        "name": "team",
+                        "type": "VARCHAR",
+                        "qualifier": "a"
+                      }
+                    ]
+                  },
+                  "right": {
+                    "op": "SeqScan",
+                    "table": "t",
+                    "output": [
+                      {
+                        "name": "id",
+                        "type": "INT",
+                        "qualifier": "b"
+                      },
+                      {
+                        "name": "name",
+                        "type": "VARCHAR",
+                        "qualifier": "b"
+                      },
+                      {
+                        "name": "team",
+                        "type": "VARCHAR",
+                        "qualifier": "b"
+                      }
+                    ]
+                  },
+                  "predicate": {
+                    "node": "BinaryExpr",
+                    "op": "=",
+                    "line": 1,
+                    "column": 47,
+                    "value_type": "BOOL",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 43
+                    },
+                    "right": {
+                      "node": "BoundColumnExpr",
+                      "index": 3,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 48
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "exec_result": {
+            "rows": [
+              [
+                "张三",
+                "张三"
+              ],
+              [
+                "张三",
+                "李四"
+              ],
+              [
+                "李四",
+                "张三"
+              ],
+              [
+                "李四",
+                "李四"
+              ]
+            ],
+            "message": "4 rows selected",
+            "columns": [
+              "a.name",
+              "b.name"
+            ]
+          },
+          "semantic_ok": true
+        }
+      ]
+    },
+    {
+      "sql": "SELECT team,COUNT(*) AS n,AVG(id) AS mean FROM t GROUP BY team HAVING mean>1.5 ORDER BY n DESC;",
+      "results": [
+        {
+          "ok": true,
+          "error": null,
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "SELECT",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "team",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ",",
+              "line": 1,
+              "column": 12
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "COUNT",
+              "line": 1,
+              "column": 13
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": "(",
+              "line": 1,
+              "column": 18
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "*",
+              "line": 1,
+              "column": 19
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ")",
+              "line": 1,
+              "column": 20
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "AS",
+              "line": 1,
+              "column": 22
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "n",
+              "line": 1,
+              "column": 25
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ",",
+              "line": 1,
+              "column": 26
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "AVG",
+              "line": 1,
+              "column": 27
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": "(",
+              "line": 1,
+              "column": 30
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 31
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ")",
+              "line": 1,
+              "column": 33
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "AS",
+              "line": 1,
+              "column": 35
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "mean",
+              "line": 1,
+              "column": 38
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "FROM",
+              "line": 1,
+              "column": 43
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 48
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "GROUP",
+              "line": 1,
+              "column": 50
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "BY",
+              "line": 1,
+              "column": 56
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "team",
+              "line": 1,
+              "column": 59
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "HAVING",
+              "line": 1,
+              "column": 64
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "mean",
+              "line": 1,
+              "column": 71
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": ">",
+              "line": 1,
+              "column": 75
+            },
+            {
+              "type": "CONST",
+              "lexeme": "1.5",
+              "line": 1,
+              "column": 76
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "ORDER",
+              "line": 1,
+              "column": 80
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "BY",
+              "line": 1,
+              "column": 86
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "n",
+              "line": 1,
+              "column": 89
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "DESC",
+              "line": 1,
+              "column": 91
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 95
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 96
+            }
+          ],
+          "ast": [
+            {
+              "node": "SelectStmt",
+              "line": 1,
+              "column": 1,
+              "columns": [],
+              "table": "t",
+              "where": null,
+              "items": [
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 8,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 8,
+                    "name": "team"
+                  },
+                  "alias": null,
+                  "qualifier": null
+                },
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 13,
+                  "expr": {
+                    "node": "AggregateExpr",
+                    "line": 1,
+                    "column": 13,
+                    "function": "COUNT",
+                    "argument": null
+                  },
+                  "alias": "n",
+                  "qualifier": null
+                },
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 27,
+                  "expr": {
+                    "node": "AggregateExpr",
+                    "line": 1,
+                    "column": 27,
+                    "function": "AVG",
+                    "argument": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 31,
+                      "name": "id"
+                    }
+                  },
+                  "alias": "mean",
+                  "qualifier": null
+                }
+              ],
+              "order_by": [
+                {
+                  "node": "OrderItem",
+                  "line": 1,
+                  "column": 89,
+                  "expr": {
+                    "node": "IdentifierExpr",
+                    "line": 1,
+                    "column": 89,
+                    "name": "n"
+                  },
+                  "descending": true
+                }
+              ],
+              "group_by": [
+                {
+                  "node": "IdentifierExpr",
+                  "line": 1,
+                  "column": 59,
+                  "name": "team"
+                }
+              ],
+              "having": {
+                "node": "BinaryExpr",
+                "line": 1,
+                "column": 75,
+                "op": ">",
+                "left": {
+                  "node": "IdentifierExpr",
+                  "line": 1,
+                  "column": 71,
+                  "name": "mean"
+                },
+                "right": {
+                  "node": "LiteralExpr",
+                  "line": 1,
+                  "column": 76,
+                  "value": 1.5,
+                  "lit_type": "FLOAT"
+                }
+              }
+            }
+          ],
+          "plans": [
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "team"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "BIGINT",
+                    "line": 1,
+                    "column": 13
+                  },
+                  "label": "n"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 2,
+                    "value_type": "FLOAT",
+                    "line": 1,
+                    "column": 27
+                  },
+                  "label": "mean"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 1,
+                      "value_type": "BIGINT",
+                      "line": 1,
+                      "column": 13
+                    },
+                    "descending": true
+                  }
+                ],
+                "child": {
+                  "op": "Filter",
+                  "predicate": {
+                    "node": "BinaryExpr",
+                    "op": ">",
+                    "line": 1,
+                    "column": 75,
+                    "value_type": "BOOL",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 2,
+                      "value_type": "FLOAT",
+                      "line": 1,
+                      "column": 27
+                    },
+                    "right": {
+                      "node": "LiteralExpr",
+                      "line": 1,
+                      "column": 76,
+                      "value": 1.5,
+                      "lit_type": "FLOAT",
+                      "value_type": "FLOAT"
+                    }
+                  },
+                  "child": {
+                    "op": "Aggregate",
+                    "keys": [
+                      {
+                        "node": "BoundColumnExpr",
+                        "index": 2,
+                        "value_type": "VARCHAR",
+                        "line": 1,
+                        "column": 59
+                      }
+                    ],
+                    "aggregates": [
+                      {
+                        "function": "COUNT",
+                        "argument": null,
+                        "value_type": "BIGINT"
+                      },
+                      {
+                        "function": "AVG",
+                        "argument": {
+                          "node": "BoundColumnExpr",
+                          "index": 0,
+                          "value_type": "INT",
+                          "line": 1,
+                          "column": 31
+                        },
+                        "value_type": "FLOAT"
+                      }
+                    ],
+                    "child": {
+                      "op": "SeqScan",
+                      "table": "t",
+                      "output": [
+                        {
+                          "name": "id",
+                          "type": "INT",
+                          "qualifier": "t"
+                        },
+                        {
+                          "name": "name",
+                          "type": "VARCHAR",
+                          "qualifier": "t"
+                        },
+                        {
+                          "name": "team",
+                          "type": "VARCHAR",
+                          "qualifier": "t"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "VARCHAR",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "team"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "BIGINT",
+                    "line": 1,
+                    "column": 13
+                  },
+                  "label": "n"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 2,
+                    "value_type": "FLOAT",
+                    "line": 1,
+                    "column": 27
+                  },
+                  "label": "mean"
+                }
+              ],
+              "child": {
+                "op": "Sort",
+                "keys": [
+                  {
+                    "expr": {
+                      "node": "BoundColumnExpr",
+                      "index": 1,
+                      "value_type": "BIGINT",
+                      "line": 1,
+                      "column": 13
+                    },
+                    "descending": true
+                  }
+                ],
+                "child": {
+                  "op": "Filter",
+                  "predicate": {
+                    "node": "BinaryExpr",
+                    "op": ">",
+                    "line": 1,
+                    "column": 75,
+                    "value_type": "BOOL",
+                    "left": {
+                      "node": "BoundColumnExpr",
+                      "index": 2,
+                      "value_type": "FLOAT",
+                      "line": 1,
+                      "column": 27
+                    },
+                    "right": {
+                      "node": "LiteralExpr",
+                      "line": 1,
+                      "column": 76,
+                      "value": 1.5,
+                      "lit_type": "FLOAT",
+                      "value_type": "FLOAT"
+                    }
+                  },
+                  "child": {
+                    "op": "Aggregate",
+                    "keys": [
+                      {
+                        "node": "BoundColumnExpr",
+                        "index": 2,
+                        "value_type": "VARCHAR",
+                        "line": 1,
+                        "column": 59
+                      }
+                    ],
+                    "aggregates": [
+                      {
+                        "function": "COUNT",
+                        "argument": null,
+                        "value_type": "BIGINT"
+                      },
+                      {
+                        "function": "AVG",
+                        "argument": {
+                          "node": "BoundColumnExpr",
+                          "index": 0,
+                          "value_type": "INT",
+                          "line": 1,
+                          "column": 31
+                        },
+                        "value_type": "FLOAT"
+                      }
+                    ],
+                    "child": {
+                      "op": "SeqScan",
+                      "table": "t",
+                      "output": [
+                        {
+                          "name": "id",
+                          "type": "INT",
+                          "qualifier": "t"
+                        },
+                        {
+                          "name": "name",
+                          "type": "VARCHAR",
+                          "qualifier": "t"
+                        },
+                        {
+                          "name": "team",
+                          "type": "VARCHAR",
+                          "qualifier": "t"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "exec_result": {
+            "rows": [
+              [
+                "A",
+                2,
+                2.0
+              ]
+            ],
+            "message": "1 row selected",
+            "columns": [
+              "team",
+              "n",
+              "mean"
+            ]
+          },
+          "semantic_ok": true
+        }
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*),AVG(value) FROM empty_table;",
+      "results": [
+        {
+          "ok": true,
+          "error": null,
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "SELECT",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "COUNT",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": "(",
+              "line": 1,
+              "column": 13
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "*",
+              "line": 1,
+              "column": 14
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ")",
+              "line": 1,
+              "column": 15
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ",",
+              "line": 1,
+              "column": 16
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "AVG",
+              "line": 1,
+              "column": 17
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": "(",
+              "line": 1,
+              "column": 20
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "value",
+              "line": 1,
+              "column": 21
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ")",
+              "line": 1,
+              "column": 26
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "FROM",
+              "line": 1,
+              "column": 28
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "empty_table",
+              "line": 1,
+              "column": 33
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 44
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 45
+            }
+          ],
+          "ast": [
+            {
+              "node": "SelectStmt",
+              "line": 1,
+              "column": 1,
+              "columns": [],
+              "table": "empty_table",
+              "where": null,
+              "items": [
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 8,
+                  "expr": {
+                    "node": "AggregateExpr",
+                    "line": 1,
+                    "column": 8,
+                    "function": "COUNT",
+                    "argument": null
+                  },
+                  "alias": null,
+                  "qualifier": null
+                },
+                {
+                  "node": "SelectItem",
+                  "line": 1,
+                  "column": 17,
+                  "expr": {
+                    "node": "AggregateExpr",
+                    "line": 1,
+                    "column": 17,
+                    "function": "AVG",
+                    "argument": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 21,
+                      "name": "value"
+                    }
+                  },
+                  "alias": null,
+                  "qualifier": null
+                }
+              ]
+            }
+          ],
+          "plans": [
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "BIGINT",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "COUNT(*)"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "FLOAT",
+                    "line": 1,
+                    "column": 17
+                  },
+                  "label": "AVG(value)"
+                }
+              ],
+              "child": {
+                "op": "Aggregate",
+                "keys": [],
+                "aggregates": [
+                  {
+                    "function": "COUNT",
+                    "argument": null,
+                    "value_type": "BIGINT"
+                  },
+                  {
+                    "function": "AVG",
+                    "argument": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 21
+                    },
+                    "value_type": "FLOAT"
+                  }
+                ],
+                "child": {
+                  "op": "SeqScan",
+                  "table": "empty_table",
+                  "output": [
+                    {
+                      "name": "value",
+                      "type": "INT",
+                      "qualifier": "empty_table"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "op": "Project",
+              "items": [
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 0,
+                    "value_type": "BIGINT",
+                    "line": 1,
+                    "column": 8
+                  },
+                  "label": "COUNT(*)"
+                },
+                {
+                  "expr": {
+                    "node": "BoundColumnExpr",
+                    "index": 1,
+                    "value_type": "FLOAT",
+                    "line": 1,
+                    "column": 17
+                  },
+                  "label": "AVG(value)"
+                }
+              ],
+              "child": {
+                "op": "Aggregate",
+                "keys": [],
+                "aggregates": [
+                  {
+                    "function": "COUNT",
+                    "argument": null,
+                    "value_type": "BIGINT"
+                  },
+                  {
+                    "function": "AVG",
+                    "argument": {
+                      "node": "BoundColumnExpr",
+                      "index": 0,
+                      "value_type": "INT",
+                      "line": 1,
+                      "column": 21
+                    },
+                    "value_type": "FLOAT"
+                  }
+                ],
+                "child": {
+                  "op": "SeqScan",
+                  "table": "empty_table",
+                  "output": [
+                    {
+                      "name": "value",
+                      "type": "INT",
+                      "qualifier": "empty_table"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "exec_result": {
+            "rows": [
+              [
+                0,
+                null
+              ]
+            ],
+            "message": "1 row selected",
+            "columns": [
+              "COUNT(*)",
+              "AVG(value)"
+            ]
+          },
+          "semantic_ok": true
+        }
+      ]
+    },
+    {
+      "sql": "SELECT id FROM t a JOIN t b ON a.id=b.id;",
+      "results": [
+        {
+          "ok": false,
+          "error": "[SEMANTIC] Error at line 1, column 8: 列名存在歧义，请指定表名或别名：id",
+          "tokens": [
+            {
+              "type": "KEYWORD",
+              "lexeme": "SELECT",
+              "line": 1,
+              "column": 1
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 8
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "FROM",
+              "line": 1,
+              "column": 11
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 16
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 18
+            },
+            {
+              "type": "KEYWORD",
+              "lexeme": "JOIN",
+              "line": 1,
+              "column": 20
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "t",
+              "line": 1,
+              "column": 25
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 27
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "ON",
+              "line": 1,
+              "column": 29
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "a",
+              "line": 1,
+              "column": 32
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 33
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 34
+            },
+            {
+              "type": "OPERATOR",
+              "lexeme": "=",
+              "line": 1,
+              "column": 36
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "b",
+              "line": 1,
+              "column": 37
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ".",
+              "line": 1,
+              "column": 38
+            },
+            {
+              "type": "IDENTIFIER",
+              "lexeme": "id",
+              "line": 1,
+              "column": 39
+            },
+            {
+              "type": "DELIMITER",
+              "lexeme": ";",
+              "line": 1,
+              "column": 41
+            },
+            {
+              "type": "EOF",
+              "lexeme": "",
+              "line": 1,
+              "column": 42
+            }
+          ],
+          "ast": [
+            {
+              "node": "SelectStmt",
+              "line": 1,
+              "column": 1,
+              "columns": [
+                "id"
+              ],
+              "table": "t",
+              "where": null,
+              "alias": "a",
+              "joins": [
+                {
+                  "node": "JoinClause",
+                  "line": 1,
+                  "column": 20,
+                  "table": "t",
+                  "alias": "b",
+                  "on": {
+                    "node": "BinaryExpr",
+                    "line": 1,
+                    "column": 36,
+                    "op": "=",
+                    "left": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 32,
+                      "name": "id",
+                      "qualifier": "a"
+                    },
+                    "right": {
+                      "node": "IdentifierExpr",
+                      "line": 1,
+                      "column": 37,
+                      "name": "id",
+                      "qualifier": "b"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "plans": [],
+          "exec_result": null,
+          "semantic_ok": false
+        }
+      ]
+    }
+  ]
+}

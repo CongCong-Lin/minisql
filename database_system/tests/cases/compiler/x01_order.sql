@@ -1,0 +1,2 @@
+CREATE TABLE t(id INT);
+SELECT id AS number FROM t ORDER BY number DESC;

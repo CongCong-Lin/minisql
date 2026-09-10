@@ -2,7 +2,7 @@
 
 ## 当前里程碑
 
-M1 已提供公共异常、Token、AST、结果和接口骨架。C 已实现类型、语义、内存／JSON／系统目录后端，以及真实页读写、LRU／FIFO 缓存和空闲链，详见 [C 交付说明](docs/c_implementation.md)。SQL 解析、表级存储、计划和执行器仍为其他成员待实现模块。
+基础 SQL、编译与执行流水线、记录编码、目录及页缓存已经完成集成。当前增加单表 UPDATE、多键 ORDER BY、INNER JOIN、GROUP BY、COUNT／SUM／AVG／MIN／MAX 和 HAVING，详见 [扩展说明](docs/extensions.md)。
 
 ## 运行检查
 
@@ -15,7 +15,7 @@ python -m pytest
 
 也可在仓库根目录运行 `python -m pytest`。两处使用同一套测试。
 
-后续完整实现才使用：
+通过 SQL 文件使用，先准备文件中的表结构和数据：
 
 ```powershell
 python -m cli.main example.sql --mode compiler --data-dir data
@@ -23,7 +23,18 @@ python -m cli.main example.sql --mode database --data-dir data
 python -m tools.case_runner --suite all
 ```
 
-当前 CLI 和用例执行器仍明确报告 M1 未实现并返回 2。C 已提交 16 条公共 SQL 用例及预期输出，语义结果通过模块核对，完整命令行比对待联调。模块参数化测试不计入课程要求的 60 条 SQL 用例。
+`database` 模式执行数据操作，`compiler` 模式展示编译结果并仅提交 CREATE 的目录。每条 SQL 以分号结束。默认展示 Token、AST、原始及优化计划，使用 `--no-tokens --no-ast --no-plan --no-opt-plan` 简化输出。
+
+可重复运行的完整演示：
+
+```powershell
+python -m tools.extension_demo
+python -m tools.extension_demo --details
+```
+
+脚本在 `data/` 下创建独立目录，执行 [扩展示例](examples/extensions/)，校验结果并保存日志。已有数据库文件格式兼容；正常关闭或断开连接后保存数据。
+
+测试同时覆盖模块、真实 SQL 链路、公共输出基准和跨进程重启。模块参数化测试不计入团队约定的公共 SQL 用例数量，最新验证结果见 [运行记录](docs/extensions_validation.md)。
 
 ## 职责边界
 
@@ -34,11 +45,11 @@ python -m tools.case_runner --suite all
 | C | semantic、types、catalog、page、buffer、file_manager |
 | D | planner、optimizer、errors、utils/results、executor、evaluator、runtime、持续集成 |
 
-所有公共实现入口均有中文说明。未实现的业务方法抛 `NotImplementedError`，不要把存根返回 None 或空结果作为成功。
+上表记录基础开发归属。当前数据库扩展由负责人独立维护，UI 同伴只在界面分支工作。
 
 AST 构造时位置使用关键字参数，例如 `ColumnDef("id", "INT", line=1, column=16)`。AST 序列化包含结构字段和节点名称，排除语义标注。Token 枚举值和公开名称一致。
 
-`engine.runtime._compile_statement` 是 M1 的内部连接器，只接收单语句 Token，连接语法、语义、计划和优化；它不是公开 SQL 提交入口。完整扫描、分号恢复、目录提交和执行仍由待实现的 `run()` 承担。
+`engine.runtime._compile_statement` 是内部单语句连接器。完整扫描、分号恢复、目录提交和执行由 `run()` 承担；纯编译使用 `compile_sql()`，它通过目录快照避免写入实际数据库。已有 UI 使用的内部检查入口保持兼容。
 
 ## 开发约定
 

@@ -1,8 +1,8 @@
 # 任务交接文档：《大型平台软件设计实习》四人协作数据库系统
 
-> **文档版本**：v1.5（2026-09-08）
+> **文档版本**：v1.6（2026-09-10）
 > **交接目的**：让接手成员依据本文与两份核心文档继续推进开发。
-> **当前状态**：v1.5 与 M1 骨架已落实；C 已实现类型、语义、三种目录后端、物理页、缓存和空闲链，并补齐模块测试及 16 条公共 SQL 样例。A/B/D 业务与完整 SQL 验收仍待完成，系统目录真实行级联调和四人会签未标记完成。详见 [C 交付说明](../../database_system/docs/c_implementation.md) 与 [工程入口](../../database_system/README.md)。
+> **当前状态**：基础四人代码已在 develop 合并并完成 485 项基线回归；当前独立扩展 UPDATE、ORDER BY、INNER JOIN、GROUP BY、HAVING。同伴只在 feat/sqlyog-ui 开发界面，后续再合并。当前入口与行为以 [工程入口](../../database_system/README.md)、[公共契约 v1.6](contracts.md)、[扩展说明](../../database_system/docs/extensions.md) 和 [验证记录](../../database_system/docs/extensions_validation.md) 为准。下文保留 v1.5 阶段历史说明，其中旧进度和四人协作安排不代表当前扩展状态。
 
 ## 1. 项目背景
 

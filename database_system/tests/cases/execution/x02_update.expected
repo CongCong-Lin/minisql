@@ -1,0 +1,27 @@
+TOKENS: [{"column":1,"lexeme":"CREATE","line":1,"type":"KEYWORD"},{"column":8,"lexeme":"TABLE","line":1,"type":"KEYWORD"},{"column":14,"lexeme":"t","line":1,"type":"IDENTIFIER"},{"column":15,"lexeme":"(","line":1,"type":"DELIMITER"},{"column":16,"lexeme":"a","line":1,"type":"IDENTIFIER"},{"column":18,"lexeme":"INT","line":1,"type":"KEYWORD"},{"column":21,"lexeme":",","line":1,"type":"DELIMITER"},{"column":23,"lexeme":"b","line":1,"type":"IDENTIFIER"},{"column":25,"lexeme":"INT","line":1,"type":"KEYWORD"},{"column":28,"lexeme":")","line":1,"type":"DELIMITER"},{"column":29,"lexeme":";","line":1,"type":"DELIMITER"},{"column":30,"lexeme":"","line":1,"type":"EOF"}]
+AST: [{"column":1,"columns":[{"col_type":"INT","column":16,"line":1,"name":"a","node":"ColumnDef"},{"col_type":"INT","column":23,"line":1,"name":"b","node":"ColumnDef"}],"line":1,"node":"CreateTableStmt","table":"t"}]
+SEMANTIC: OK
+PLAN: {"columns":[{"column":16,"line":1,"name":"a","type":"INT"},{"column":23,"line":1,"name":"b","type":"INT"}],"op":"CreateTable","table":"t"}
+OPT_PLAN: {"columns":[{"column":16,"line":1,"name":"a","type":"INT"},{"column":23,"line":1,"name":"b","type":"INT"}],"op":"CreateTable","table":"t"}
+RESULT: OK
+TOKENS: [{"column":1,"lexeme":"INSERT","line":2,"type":"KEYWORD"},{"column":8,"lexeme":"INTO","line":2,"type":"KEYWORD"},{"column":13,"lexeme":"t","line":2,"type":"IDENTIFIER"},{"column":14,"lexeme":"(","line":2,"type":"DELIMITER"},{"column":15,"lexeme":"a","line":2,"type":"IDENTIFIER"},{"column":16,"lexeme":",","line":2,"type":"DELIMITER"},{"column":17,"lexeme":"b","line":2,"type":"IDENTIFIER"},{"column":18,"lexeme":")","line":2,"type":"DELIMITER"},{"column":20,"lexeme":"VALUES","line":2,"type":"KEYWORD"},{"column":26,"lexeme":"(","line":2,"type":"DELIMITER"},{"column":27,"lexeme":"1","line":2,"type":"CONST"},{"column":28,"lexeme":",","line":2,"type":"DELIMITER"},{"column":29,"lexeme":"2","line":2,"type":"CONST"},{"column":30,"lexeme":")","line":2,"type":"DELIMITER"},{"column":31,"lexeme":";","line":2,"type":"DELIMITER"},{"column":32,"lexeme":"","line":2,"type":"EOF"}]
+AST: [{"column":1,"columns":["a","b"],"line":2,"node":"InsertStmt","table":"t","values":[{"column":27,"line":2,"lit_type":"INT","node":"LiteralExpr","value":1},{"column":29,"line":2,"lit_type":"INT","node":"LiteralExpr","value":2}]}]
+SEMANTIC: OK
+PLAN: {"columns":["a","b"],"op":"Insert","table":"t","values":[1,2]}
+OPT_PLAN: {"columns":["a","b"],"op":"Insert","table":"t","values":[1,2]}
+RESULT: 1 row inserted
+TOKENS: [{"column":1,"lexeme":"UPDATE","line":3,"type":"KEYWORD"},{"column":8,"lexeme":"t","line":3,"type":"IDENTIFIER"},{"column":10,"lexeme":"SET","line":3,"type":"KEYWORD"},{"column":14,"lexeme":"a","line":3,"type":"IDENTIFIER"},{"column":15,"lexeme":"=","line":3,"type":"OPERATOR"},{"column":16,"lexeme":"b","line":3,"type":"IDENTIFIER"},{"column":17,"lexeme":",","line":3,"type":"DELIMITER"},{"column":18,"lexeme":"b","line":3,"type":"IDENTIFIER"},{"column":19,"lexeme":"=","line":3,"type":"OPERATOR"},{"column":20,"lexeme":"a","line":3,"type":"IDENTIFIER"},{"column":21,"lexeme":";","line":3,"type":"DELIMITER"},{"column":22,"lexeme":"","line":3,"type":"EOF"}]
+AST: [{"assignments":[{"column":14,"line":3,"name":"a","node":"Assignment","value":{"column":16,"line":3,"name":"b","node":"IdentifierExpr"}},{"column":18,"line":3,"name":"b","node":"Assignment","value":{"column":20,"line":3,"name":"a","node":"IdentifierExpr"}}],"column":1,"line":3,"node":"UpdateStmt","table":"t","where":null}]
+SEMANTIC: OK
+PLAN: {"assignments":[{"expr":{"column":16,"index":1,"line":3,"node":"BoundColumnExpr","value_type":"INT"},"index":0},{"expr":{"column":20,"index":0,"line":3,"node":"BoundColumnExpr","value_type":"INT"},"index":1}],"child":{"op":"SeqScan","table":"t"},"op":"Update","table":"t"}
+OPT_PLAN: {"assignments":[{"expr":{"column":16,"index":1,"line":3,"node":"BoundColumnExpr","value_type":"INT"},"index":0},{"expr":{"column":20,"index":0,"line":3,"node":"BoundColumnExpr","value_type":"INT"},"index":1}],"child":{"op":"SeqScan","table":"t"},"op":"Update","table":"t"}
+RESULT: 1 row updated
+TOKENS: [{"column":1,"lexeme":"SELECT","line":4,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":4,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":4,"type":"KEYWORD"},{"column":15,"lexeme":"t","line":4,"type":"IDENTIFIER"},{"column":16,"lexeme":";","line":4,"type":"DELIMITER"},{"column":17,"lexeme":"","line":4,"type":"EOF"}]
+AST: [{"column":1,"columns":"*","line":4,"node":"SelectStmt","table":"t","where":null}]
+SEMANTIC: OK
+PLAN: {"child":{"op":"SeqScan","table":"t"},"columns":"*","op":"Project"}
+OPT_PLAN: {"child":{"op":"SeqScan","table":"t"},"columns":"*","op":"Project"}
+COLUMNS: ["a","b"]
+ROW: [2,1]
+RESULT: 1 row selected
+EXIT: 0

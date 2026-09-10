@@ -1,0 +1,10 @@
+{
+  "01_setup.sql": {"exit": 0, "queries": [], "errors": []},
+  "02_order.sql": {"exit": 0, "queries": [{"columns": ["name", "score"], "rows": [["李四", 92], ["张三", 85], ["王五", 67]]}], "errors": []},
+  "03_update.sql": {"exit": 0, "queries": [{"columns": ["id", "name", "score"], "rows": [[1, "张三", 90], [2, "李四", 97], [3, "王五", 67]]}], "errors": []},
+  "04_join.sql": {"exit": 0, "queries": [{"columns": ["s.name", "c.title", "s.score"], "rows": [["张三", "数据库", 90], ["张三", "编译原理", 90], ["李四", "数据库", 97], ["王五", "数据库", 67]]}], "errors": []},
+  "05_group.sql": {"exit": 0, "queries": [{"columns": ["s.team", "n", "total", "mean"], "rows": [["A", 3, 277, 92.33333333333333]]}], "errors": []},
+  "06_errors.sql": {"exit": 1, "queries": [{"columns": ["id", "score"], "rows": [[1, 90], [2, 97], [3, 67]]}], "errors": ["SEMANTIC", "EXECUTE"]},
+  "07_empty.sql": {"exit": 0, "queries": [{"columns": ["COUNT(*)", "SUM(value)", "AVG(value)", "MIN(value)", "MAX(value)"], "rows": [[0, null, null, null, null]]}], "errors": []},
+  "08_reopen.sql": {"exit": 0, "queries": [{"columns": ["id", "name", "score"], "rows": [[1, "张三", 90], [2, "李四", 97], [3, "王五", 67]]}], "errors": []}
+}

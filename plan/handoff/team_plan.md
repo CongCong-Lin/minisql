@@ -1,9 +1,9 @@
-# MiniSQL 四人分工与验收（定稿 v1.5）
+# MiniSQL 基础分工与扩展协作（v1.6）
 
-> 修订日期：2026-09-08。配套文件：[公共契约 v1.5](contracts.md)、[工作流交接 v1.5](handoff.md)。
+> 修订日期：2026-09-10。配套文件：[公共契约 v1.6](contracts.md)、[工作流交接](handoff.md)。
 > 接口、格式和错误行为以公共契约为准；本文件明确负责人、协作边界和交付验收。
 > 分工原则：每人负责一条贯穿编译、存储或执行集成的职责线，通过冻结接口、公共类型和测试替身并行开发。
-> 当前进度：v1.5 与 M1 骨架已建立；C 已交付类型、语义、目录、物理页及缓存实现和模块测试，16 条公共用例待完整 CLI 联调。A/B/D 业务、真实跨模块验收和四人会签仍待完成。运行方式见 [工程说明](../../database_system/README.md)，C 实现见 [交付说明](../../database_system/docs/c_implementation.md)。
+> 当前进度：基础四人代码已在 develop 合并，扩展前基线为 485 项通过。当前负责人独立实现数据库可选扩展，同伴在 feat/sqlyog-ui 只开发 UI，最后合并。见 [扩展说明](../../database_system/docs/extensions.md) 和 [运行记录](../../database_system/docs/extensions_validation.md)。下文四人分工及审批规则保留为基础阶段记录；本轮扩展按用户明确授权跨模块实施，不虚构四人会签。
 
 ---
 

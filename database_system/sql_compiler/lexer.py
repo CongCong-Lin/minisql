@@ -41,7 +41,7 @@ def tokenize(text: str) -> list[Token]:
         "JOIN", "AND", "OR", "NOT", "NULL", "INT", "VARCHAR", "TRUE",
         "FALSE",
     }
-    delimiters = {"(", ")", ",", ";"}
+    delimiters = {"(", ")", ",", ";", "."}
 
     tokens: list[Token] = []
     diagnostics: list[tuple[int, LexerError]] = []

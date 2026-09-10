@@ -1,0 +1,2 @@
+CREATE TABLE t(id INT, name VARCHAR);
+SELECT name,COUNT(*) FROM t;
