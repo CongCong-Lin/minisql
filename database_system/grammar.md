@@ -53,6 +53,7 @@ factor         -> column_ref | aggregate | literal | '(' expression ')' ;
 - 聚合函数只有 COUNT 允许星号；SUM／AVG 只接受 INT 列。聚合出现在 WHERE、ON、UPDATE 或 DELETE 条件中时由语义阶段拒绝。
 - 分组后的非聚合引用必须属于分组键。HAVING 只能用于分组或聚合查询。HAVING／ORDER BY 可以引用结果别名，但与来源列同名时报告歧义。
 - UPDATE 支持单表和多列赋值，所有右侧表达式读取原行；WHERE 缺省时更新全表。
+- 实现资源边界：每条递归路径的括号与 NOT 混合嵌套最多 64 层，表达式树深度最多 128 层（叶子为 1 层）。超过任一边界报带源码位置的 ParserError，并由运行时继续处理后续分号语句；限制适用于 WHERE、ON、HAVING 及 UPDATE 赋值等所有表达式。
 - ORDER BY 默认升序，支持列、限定列、结果别名和聚合项；不支持序号或任意算术排序表达式。
 - 不支持外连接、USING、NATURAL JOIN、逗号连接、子查询、DISTINCT、DROP TABLE、NULL 输入、默认值、普通 SELECT 列表算术表达式或 VARCHAR 长度参数。
 
