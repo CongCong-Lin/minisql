@@ -139,6 +139,41 @@ class StorageEngine:
         """委托页后端写回全部脏页。"""
         self.pages.flush_all()
 
+    def update_record(self, table: str, rid: RecordId, row: tuple,
+                      columns: list[ColumnDef]) -> RecordId:
+        """短记录原位替换，长记录先插入再删除旧槽，不改变页格式。"""
+        encoded = serialize(row, columns)
+        entry = self._find_table(table)
+        if entry is None:
+            raise ExecuteError("table does not exist")
+        if (not isinstance(rid, tuple) or len(rid) != 2
+                or any(type(value) is not int for value in rid)):
+            raise ExecuteError("invalid record id")
+        page_id, slot = rid
+        if page_id <= 0 or slot < 0:
+            raise ExecuteError("invalid record id")
+        if not self._belongs(entry[1], page_id):
+            raise ExecuteError("record id does not belong to table")
+        page = self.pages.get_page(page_id)
+        _, slots, free, _, _ = self._header(page, page_id)
+        if slot >= slots:
+            raise ExecuteError("invalid record id")
+        directory = PAGE_SIZE - 4 * (slot + 1)
+        offset, length = struct.unpack_from("<HH", page.data, directory)
+        if offset == 0xFFFF:
+            raise ExecuteError("cannot update a deleted record")
+        if offset < 16 or length == 0 or offset + length > min(free, PAGE_SIZE - 4 * slots):
+            raise ExecuteError("corrupt slot")
+        if len(encoded) <= length:
+            page.data[offset:offset + len(encoded)] = encoded
+            struct.pack_into("<H", page.data, directory + 2, len(encoded))
+            page.dirty = True
+            return rid
+        # 插入可能触发淘汰；不再使用之前持有的 page 引用。
+        new_rid = self.insert_record(table, row, columns)
+        self.delete_record(table, rid)
+        return new_rid
+
     def close(self) -> None:
         """委托页后端刷盘关闭，完成实现后须支持重复调用。"""
         self.pages.close()

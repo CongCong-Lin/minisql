@@ -1,0 +1,9 @@
+TOKENS: [{"column":1,"lexeme":"CREATE","line":1,"type":"KEYWORD"},{"column":8,"lexeme":"TABLE","line":1,"type":"KEYWORD"},{"column":14,"lexeme":"t","line":1,"type":"IDENTIFIER"},{"column":15,"lexeme":"(","line":1,"type":"DELIMITER"},{"column":16,"lexeme":"id","line":1,"type":"IDENTIFIER"},{"column":19,"lexeme":"INT","line":1,"type":"KEYWORD"},{"column":22,"lexeme":")","line":1,"type":"DELIMITER"},{"column":23,"lexeme":";","line":1,"type":"DELIMITER"},{"column":24,"lexeme":"","line":1,"type":"EOF"}]
+AST: [{"column":1,"columns":[{"col_type":"INT","column":16,"line":1,"name":"id","node":"ColumnDef"}],"line":1,"node":"CreateTableStmt","table":"t"}]
+SEMANTIC: OK
+PLAN: {"columns":[{"column":16,"line":1,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+OPT_PLAN: {"columns":[{"column":16,"line":1,"name":"id","type":"INT"}],"op":"CreateTable","table":"t"}
+TOKENS: [{"column":1,"lexeme":"SELECT","line":2,"type":"KEYWORD"},{"column":8,"lexeme":"*","line":2,"type":"OPERATOR"},{"column":10,"lexeme":"FROM","line":2,"type":"KEYWORD"},{"column":15,"lexeme":"t","line":2,"type":"IDENTIFIER"},{"column":17,"lexeme":"a","line":2,"type":"IDENTIFIER"},{"column":19,"lexeme":"JOIN","line":2,"type":"KEYWORD"},{"column":24,"lexeme":"t","line":2,"type":"IDENTIFIER"},{"column":26,"lexeme":"b","line":2,"type":"IDENTIFIER"},{"column":28,"lexeme":"ON","line":2,"type":"IDENTIFIER"},{"column":31,"lexeme":"a","line":2,"type":"IDENTIFIER"},{"column":32,"lexeme":".","line":2,"type":"DELIMITER"},{"column":33,"lexeme":"id","line":2,"type":"IDENTIFIER"},{"column":35,"lexeme":";","line":2,"type":"DELIMITER"},{"column":36,"lexeme":"","line":2,"type":"EOF"}]
+AST: [{"alias":"a","column":1,"columns":"*","joins":[{"alias":"b","column":19,"line":2,"node":"JoinClause","on":{"column":31,"line":2,"name":"id","node":"IdentifierExpr","qualifier":"a"},"table":"t"}],"line":2,"node":"SelectStmt","table":"t","where":null}]
+[SEMANTIC] Error at line 2, column 31: ON 条件必须为 BOOL
+EXIT: 1

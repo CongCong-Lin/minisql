@@ -24,7 +24,10 @@ class Node:
         result = {"node": type(self).__name__}
         for member in fields(self):
             if member.metadata.get("serialize", True):
-                result[member.name] = encode(getattr(self, member.name))
+                value = getattr(self, member.name)
+                if member.metadata.get("omit_empty") and (value is None or value == []):
+                    continue
+                result[member.name] = encode(value)
         return result
 
 
@@ -73,6 +76,20 @@ class SelectStmt(Stmt):
     columns: list[str] | Literal["*"]
     table: str
     where: Expr | None
+    items: list[SelectItem] = field(default_factory=list, kw_only=True,
+                                    metadata={"omit_empty": True})
+    alias: str | None = field(default=None, kw_only=True, metadata={"omit_empty": True})
+    joins: list[JoinClause] = field(default_factory=list, kw_only=True,
+                                   metadata={"omit_empty": True})
+    order_by: list[OrderItem] = field(default_factory=list, kw_only=True,
+                                     metadata={"omit_empty": True})
+    group_by: list[IdentifierExpr] = field(default_factory=list, kw_only=True,
+                                          metadata={"omit_empty": True})
+    having: Expr | None = field(default=None, kw_only=True, metadata={"omit_empty": True})
+    binding: dict | None = field(default=None, init=False, repr=False,
+                                 metadata={"serialize": False})
+    selection_items: list[SelectItem] = field(default_factory=list, init=False, repr=False,
+                                             metadata={"serialize": False})
 
 
 @dataclass
@@ -105,6 +122,7 @@ class IdentifierExpr(Expr):
     """标识符表达式，保留原始大小写。"""
 
     name: str
+    qualifier: str | None = field(default=None, kw_only=True, metadata={"omit_empty": True})
     resolved_type: str | None = field(default=None, init=False, repr=False,
                                      metadata={"serialize": False})
 
@@ -115,3 +133,56 @@ class LiteralExpr(Expr):
 
     value: int | float | str | bool
     lit_type: str
+
+
+@dataclass
+class SelectItem(Node):
+    """选择项；expr 为空表示星号，qualifier 用于限定星号。"""
+
+    expr: Expr | None
+    alias: str | None = None
+    qualifier: str | None = None
+
+
+@dataclass
+class OrderItem(Node):
+    """排序键和方向，未指定方向时升序。"""
+
+    expr: Expr
+    descending: bool = False
+
+
+@dataclass
+class JoinClause(Node):
+    """内连接右表、可选别名及 ON 条件。"""
+
+    table: str
+    alias: str | None
+    on: Expr
+
+
+@dataclass
+class AggregateExpr(Expr):
+    """聚合参数仅允许列引用，空参数表示 COUNT(*)。"""
+
+    function: str
+    argument: IdentifierExpr | None
+
+
+@dataclass
+class Assignment(Node):
+    """更新目标列及基于原行求值的表达式。"""
+
+    name: str
+    value: Expr
+
+
+@dataclass
+class UpdateStmt(Stmt):
+    """单表多列更新，where 为空时更新所有行。"""
+
+    table: str
+    assignments: list[Assignment]
+    where: Expr | None
+    binding: dict | None = field(default=None, init=False, repr=False,
+                                 metadata={"serialize": False})

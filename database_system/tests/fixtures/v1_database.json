@@ -1,0 +1,7 @@
+{
+  "description": "由扩展前 develop 提交的真实代码创建，验证磁盘格式向后兼容。",
+  "source_commit": "799ec26",
+  "sql": "CREATE TABLE legacy(id INT,count VARCHAR,asc INT); INSERT INTO legacy(id,count,asc) VALUES(1,'原有记录',10); INSERT INTO legacy(id,count,asc) VALUES(2,'另一条',20);",
+  "sha256": "a0dec3659aff4e951e82f7ca6d7005dcd3781396337ad197f6d8e3ac8d01acec",
+  "zlib_base64": "eJzt2TFLw0AYxvEnF9pScXBocSl2KgUHv4BTcKlQBVtxDSGWIhQL2g5url10cmspLh3F0cVvY4LfQpNrig4dJEsH/z84OLj3Pbjxufeke9Z2ZPSVUML3w2AUDIZ931ceTrIGvX4Q3uVqt0z+VgAAAAAAsEaa113d2Pxv/wCKWXw3urp0dXx6vqqqppvVaUHhcHw9KunC6xy1vI6TFdV+F7kKbkN7h8mO9zfzSAAAAAAA/qGu6jpQQzvas7N2o8Of/J/G9G1FD/N4Ovl8eY3en7ak5Uy+rOhx8fF2H8+eKxt9AAAAAAAA+JOmKkn+39U3AOY9Iw=="
+}

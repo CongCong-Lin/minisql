@@ -1,4 +1,4 @@
-name: M1 契约检查
+name: MiniSQL 回归检查
 
 on:
   push:
@@ -9,9 +9,10 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -20,3 +21,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -r database_system/requirements.txt
       - run: python -m pytest
+      - run: python -m tools.case_runner --suite all
+        working-directory: database_system

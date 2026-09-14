@@ -1,12 +1,20 @@
 """B 负责：递归下降入口，跨分段恢复由 runtime 负责。"""
 
+from collections.abc import Callable
+from dataclasses import fields
 import math
 from sql_compiler.ast_nodes import (
     BinaryExpr, ColumnDef, CreateTableStmt, DeleteStmt, IdentifierExpr,
-    InsertStmt, LiteralExpr, SelectStmt, Stmt, UnaryExpr,
+    Expr, InsertStmt, LiteralExpr, Node, SelectStmt, Stmt, UnaryExpr,
+    AggregateExpr, Assignment, JoinClause, OrderItem, SelectItem, UpdateStmt,
 )
 from sql_compiler.errors import ParserError
 from sql_compiler.lexer import Token, TokenType
+
+
+# 分别约束递归下降的调用深度和后续序列化、优化需要遍历的树深度。
+MAX_EXPRESSION_NESTING = 64
+MAX_EXPRESSION_DEPTH = 128
 
 
 def parse(tokens: list[Token]) -> list[Stmt]:
@@ -15,12 +23,13 @@ def parse(tokens: list[Token]) -> list[Stmt]:
 
 
 class _Parser:
-    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT"}
+    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT", "UPDATE"}
     FIRST_FACTOR = {"IDENTIFIER", "CONST", "'('"}
 
     def __init__(self, tokens: list[Token]) -> None:
         self.tokens = tokens
         self.index = 0
+        self._expression_nesting = 0
 
     def peek(self) -> Token:
         return self.tokens[self.index]
@@ -55,22 +64,75 @@ class _Parser:
             return self.advance()
         return None
 
+    def is_word(self, word: str) -> bool:
+        """扩展词按语境识别，避免将旧列名升级为全局保留字。"""
+        token = self.peek()
+        return token.type in {TokenType.KEYWORD, TokenType.IDENTIFIER} and token.lexeme.upper() == word
+
+    def match_word(self, word: str) -> Token | None:
+        return self.advance() if self.is_word(word) else None
+
+    def expect_word(self, word: str) -> Token:
+        if not self.is_word(word):
+            self._error({word})
+        return self.advance()
+
+    def match_delimiter(self, value: str) -> bool:
+        if self.peek().type is TokenType.DELIMITER and self.peek().lexeme == value:
+            self.advance()
+            return True
+        return False
+
     def parse(self) -> list[Stmt]:
         result = []
         while self.peek().type is not TokenType.EOF:
             if self.peek().type is not TokenType.KEYWORD or self.peek().lexeme.upper() not in self.FIRST_STATEMENT:
                 token = self.peek()
                 unsupported = token.lexeme.upper() if token.type is TokenType.KEYWORD else None
-                self._error({"CREATE", "DELETE", "INSERT", "SELECT"}, token,
+                self._error(self.FIRST_STATEMENT, token,
                             f"statement not supported: {unsupported}" if unsupported else "")
-            result.append(self.statement())
+            stmt = self.statement()
+            self._check_expression_depth(stmt)
+            result.append(stmt)
         return result
+
+    def _check_expression_depth(self, stmt: Stmt) -> None:
+        """返回 AST 前用显式栈检查长条件链，避免序列化阶段递归溢出。"""
+        pending = [(stmt, 0)]
+        while pending:
+            node, parent_depth = pending.pop()
+            depth = parent_depth + 1 if isinstance(node, Expr) else 0
+            if depth > MAX_EXPRESSION_DEPTH:
+                raise ParserError(node.line, node.column,
+                                  f"表达式树深度不能超过 {MAX_EXPRESSION_DEPTH} 层")
+            children = []
+            for member in fields(node):
+                if not member.metadata.get("serialize", True):
+                    continue
+                value = getattr(node, member.name)
+                if isinstance(value, Node):
+                    children.append(value)
+                elif isinstance(value, list):
+                    children.extend(item for item in value if isinstance(item, Node))
+            pending.extend((child, depth) for child in reversed(children))
+
+    def _nested_expression(self, token: Token, parse_operand: Callable[[], Expr]) -> Expr:
+        """括号和 NOT 共用嵌套预算，超限时保留触发位置。"""
+        if self._expression_nesting >= MAX_EXPRESSION_NESTING:
+            raise ParserError(token.line, token.column,
+                              f"表达式括号和 NOT 的嵌套不能超过 {MAX_EXPRESSION_NESTING} 层")
+        self._expression_nesting += 1
+        try:
+            return parse_operand()
+        finally:
+            self._expression_nesting -= 1
 
     def statement(self) -> Stmt:
         word = self.peek().lexeme.upper()
         if word == "CREATE": return self.create_stmt()
         if word == "INSERT": return self.insert_stmt()
         if word == "SELECT": return self.select_stmt()
+        if word == "UPDATE": return self.update_stmt()
         return self.delete_stmt()
 
     def identifier(self) -> Token:
@@ -123,15 +185,129 @@ class _Parser:
 
     def select_stmt(self) -> SelectStmt:
         start = self.expect(TokenType.KEYWORD, "SELECT")
-        if self.peek().type is TokenType.OPERATOR and self.peek().lexeme == "*":
-            self.advance(); columns = "*"
-        else:
-            columns = [t.lexeme for t in self.id_list()]
+        items = [self.select_item()]
+        while self.match_delimiter(","):
+            items.append(self.select_item())
         self.expect(TokenType.KEYWORD, "FROM")
         table = self.identifier()
+        alias = self.table_alias()
+        joins = []
+        while self.is_word("INNER") or self.is_word("JOIN"):
+            join_start = self.peek()
+            self.match_word("INNER")
+            self.expect_word("JOIN")
+            right = self.identifier()
+            right_alias = self.table_alias()
+            self.expect_word("ON")
+            joins.append(JoinClause(right.lexeme, right_alias, self.expression(),
+                                    line=join_start.line, column=join_start.column))
+        where = self.where_opt()
+        group_by = []
+        if self.match_word("GROUP"):
+            self.expect_word("BY")
+            group_by.append(self.column_reference())
+            while self.match_delimiter(","):
+                group_by.append(self.column_reference())
+        having = self.expression() if self.match_word("HAVING") else None
+        order_by = []
+        if self.match_word("ORDER"):
+            self.expect_word("BY")
+            while True:
+                token = self.peek()
+                expr = self.column_or_aggregate()
+                descending = bool(self.match_word("DESC"))
+                if not descending:
+                    self.match_word("ASC")
+                order_by.append(OrderItem(expr, descending, line=token.line, column=token.column))
+                if not self.match_delimiter(","):
+                    break
+        self.expect(TokenType.DELIMITER, ";")
+        # 基础语句保持原有 AST 形状和公开构造方式。
+        if len(items) == 1 and items[0].expr is None and items[0].qualifier is None:
+            columns, extended = "*", []
+        elif all(isinstance(item.expr, IdentifierExpr) and item.expr.qualifier is None
+                 and item.alias is None for item in items):
+            columns, extended = [item.expr.name for item in items], []
+        else:
+            columns, extended = [], items
+        stmt = SelectStmt(columns, table.lexeme, where, items=extended, alias=alias,
+                          joins=joins, group_by=group_by, having=having, order_by=order_by,
+                          line=start.line, column=start.column)
+        stmt.selection_items = items
+        return stmt
+
+    def table_alias(self) -> str | None:
+        """显式别名可使用软关键字，隐式别名避开后续子句起点。"""
+        if self.match_word("AS"):
+            return self.identifier().lexeme
+        blocked = {"INNER", "ON", "HAVING", "LEFT", "RIGHT", "FULL", "CROSS",
+                   "NATURAL", "USING", "LIMIT", "UNION"}
+        if self.peek().type is TokenType.IDENTIFIER and self.peek().lexeme.upper() not in blocked:
+            return self.advance().lexeme
+        return None
+
+    def column_reference(self) -> IdentifierExpr:
+        token = self.identifier()
+        qualifier = None
+        name = token.lexeme
+        if self.match_delimiter("."):
+            qualifier, name = name, self.identifier().lexeme
+        return IdentifierExpr(name, qualifier=qualifier, line=token.line, column=token.column)
+
+    def column_or_aggregate(self):
+        token = self.peek()
+        following = self.tokens[min(self.index + 1, len(self.tokens) - 1)]
+        if (token.type is TokenType.IDENTIFIER
+                and token.lexeme.upper() in {"COUNT", "SUM", "AVG", "MIN", "MAX"}
+                and following.type is TokenType.DELIMITER and following.lexeme == "("):
+            self.advance()
+            self.advance()
+            if self.peek().type is TokenType.OPERATOR and self.peek().lexeme == "*":
+                self.advance()
+                argument = None
+            else:
+                argument = self.column_reference()
+            self.expect(TokenType.DELIMITER, ")")
+            return AggregateExpr(token.lexeme.upper(), argument, line=token.line, column=token.column)
+        return self.column_reference()
+
+    def select_item(self) -> SelectItem:
+        token = self.peek()
+        qualifier = None
+        if token.type is TokenType.OPERATOR and token.lexeme == "*":
+            self.advance()
+            expr = None
+        elif (token.type is TokenType.IDENTIFIER and self.index + 2 < len(self.tokens)
+              and self.tokens[self.index + 1].lexeme == "."
+              and self.tokens[self.index + 2].lexeme == "*"):
+            qualifier = self.advance().lexeme
+            self.advance()
+            self.advance()
+            expr = None
+        else:
+            expr = self.column_or_aggregate()
+        alias = None
+        if self.match_word("AS"):
+            if expr is None:
+                self._error({"FROM", "','"}, suffix="star cannot have an alias")
+            alias = self.identifier().lexeme
+        return SelectItem(expr, alias, qualifier, line=token.line, column=token.column)
+
+    def update_stmt(self) -> UpdateStmt:
+        start = self.expect(TokenType.KEYWORD, "UPDATE")
+        table = self.identifier()
+        self.expect(TokenType.KEYWORD, "SET")
+        assignments = []
+        while True:
+            column = self.identifier()
+            self.expect(TokenType.OPERATOR, "=")
+            assignments.append(Assignment(column.lexeme, self.expression(),
+                                           line=column.line, column=column.column))
+            if not self.match_delimiter(","):
+                break
         where = self.where_opt()
         self.expect(TokenType.DELIMITER, ";")
-        return SelectStmt(columns, table.lexeme, where, line=start.line, column=start.column)
+        return UpdateStmt(table.lexeme, assignments, where, line=start.line, column=start.column)
 
     def delete_stmt(self) -> DeleteStmt:
         start = self.expect(TokenType.KEYWORD, "DELETE")
@@ -169,40 +345,58 @@ class _Parser:
             reason = "float literal out of range" if "." in raw else "integer literal out of range"
             raise ParserError(token.line, token.column, reason)
 
-    def expression(self): return self.or_expr()
-    def or_expr(self):
+    def expression(self) -> Expr:
+        return self.or_expr()
+
+    def or_expr(self) -> Expr:
         left = self.and_expr()
         while self.match_keyword("OR"):
-            op = self.tokens[self.index - 1]; left = BinaryExpr("OR", left, self.and_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            left = BinaryExpr("OR", left, self.and_expr(), line=op.line, column=op.column)
         return left
-    def and_expr(self):
+
+    def and_expr(self) -> Expr:
         left = self.not_expr()
         while self.match_keyword("AND"):
-            op = self.tokens[self.index - 1]; left = BinaryExpr("AND", left, self.not_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            left = BinaryExpr("AND", left, self.not_expr(), line=op.line, column=op.column)
         return left
-    def not_expr(self):
+
+    def not_expr(self) -> Expr:
         if self.match_keyword("NOT"):
-            op = self.tokens[self.index - 1]; return UnaryExpr("NOT", self.not_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            operand = self._nested_expression(op, self.not_expr)
+            return UnaryExpr("NOT", operand, line=op.line, column=op.column)
         return self.comparison()
-    def comparison(self):
+
+    def comparison(self) -> Expr:
         left = self.arith_expr()
         if self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"=", "!=", ">", ">=", "<", "<="}:
-            op = self.advance(); return BinaryExpr(op.lexeme, left, self.arith_expr(), line=op.line, column=op.column)
+            op = self.advance()
+            return BinaryExpr(op.lexeme, left, self.arith_expr(), line=op.line, column=op.column)
         return left
-    def arith_expr(self):
+
+    def arith_expr(self) -> Expr:
         left = self.term()
         while self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"+", "-"}:
-            op = self.advance(); left = BinaryExpr(op.lexeme, left, self.term(), line=op.line, column=op.column)
+            op = self.advance()
+            left = BinaryExpr(op.lexeme, left, self.term(), line=op.line, column=op.column)
         return left
-    def term(self):
+
+    def term(self) -> Expr:
         left = self.factor()
         while self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"*", "/"}:
-            op = self.advance(); left = BinaryExpr(op.lexeme, left, self.factor(), line=op.line, column=op.column)
+            op = self.advance()
+            left = BinaryExpr(op.lexeme, left, self.factor(), line=op.line, column=op.column)
         return left
-    def factor(self):
+
+    def factor(self) -> Expr:
         token = self.peek()
         if token.type is TokenType.IDENTIFIER:
-            self.advance(); return IdentifierExpr(token.lexeme, line=token.line, column=token.column)
+            return self.column_or_aggregate()
         if token.type is TokenType.DELIMITER and token.lexeme == "(":
-            self.advance(); value = self.expression(); self.expect(TokenType.DELIMITER, ")"); return value
+            self.advance()
+            value = self._nested_expression(token, self.expression)
+            self.expect(TokenType.DELIMITER, ")")
+            return value
         return self.literal()

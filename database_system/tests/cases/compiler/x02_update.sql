@@ -1,0 +1,2 @@
+CREATE TABLE t(id INT);
+UPDATE t SET id=id+1;

@@ -16,9 +16,15 @@ def execute(plan: dict, catalog: Catalog, storage: StorageEngine) -> ExecuteResu
     elif op == "Insert":
         result = _execute_insert(plan, catalog, storage)
     elif op == "Project":
-        result = _execute_project(plan, catalog, storage)
+        if "items" in plan:
+            from engine.relational import execute_query
+            result = execute_query(plan, catalog, storage)
+        else:
+            result = _execute_project(plan, catalog, storage)
     elif op == "Delete":
         result = _execute_delete(plan, catalog, storage)
+    elif op == "Update":
+        result = _execute_update(plan, catalog, storage)
     else:
         raise ExecuteError(f"unsupported plan operator '{op}'")
     storage.flush()
@@ -73,6 +79,24 @@ def _execute_delete(plan: dict, catalog: Catalog, storage: StorageEngine) -> Exe
         storage.delete_record(plan["table"], rid)
     count = len(targets)
     message = f"{count} row deleted" if count == 1 else f"{count} rows deleted"
+    return ExecuteResult([], message, [])
+
+
+def _execute_update(plan: dict, catalog: Catalog, storage: StorageEngine) -> ExecuteResult:
+    """计算及编码预检全部新行后写入，赋值之间不会观察到中间结果。"""
+    from storage.record import serialize
+    targets = []
+    for rid, old_row, columns in _scan(plan["child"], catalog, storage):
+        new_row = list(old_row)
+        for assignment in plan["assignments"]:
+            new_row[assignment["index"]] = evaluate(assignment["expr"], old_row, columns)
+        new_row = tuple(new_row)
+        serialize(new_row, columns)
+        targets.append((rid, new_row, columns))
+    for rid, row, columns in targets:
+        storage.update_record(plan["table"], rid, row, columns)
+    count = len(targets)
+    message = f"{count} row updated" if count == 1 else f"{count} rows updated"
     return ExecuteResult([], message, [])
 
 
