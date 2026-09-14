@@ -21,6 +21,95 @@ def pretty(value) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2, default=json_default)
 
 
+def format_cell(value) -> str:
+    """结果格展示：空值显示为 NULL，布尔与 SQL 字面量一致。"""
+    if value is None:
+        return "NULL"
+    if value is True:
+        return "TRUE"
+    if value is False:
+        return "FALSE"
+    return str(value)
+
+
+def token_span(tokens: list | None) -> dict | None:
+    """把语句 Token 范围转成 Tk Text 下标（行从 1 计，列从 0 计）。"""
+    if not tokens:
+        return None
+    body = [token for token in tokens if token.get("type") != "EOF"]
+    if not body:
+        return None
+    start, end = body[0], body[-1]
+    try:
+        start_line = int(start.get("line") or 1)
+        start_col = max(0, int(start.get("column") or 1) - 1)
+        end_line = int(end.get("line") or start_line)
+        lexeme = str(end.get("lexeme") or "")
+        end_col = max(0, int(end.get("column") or 1) - 1) + len(lexeme)
+    except (TypeError, ValueError):
+        return None
+    return {"start": f"{start_line}.{start_col}", "end": f"{end_line}.{end_col}"}
+
+
+def format_plan_tree(node, indent: int = 0) -> str:
+    """按 child / left / right 展开计划树，覆盖连接、排序、聚合与更新。"""
+    pad = "  " * indent
+    if node is None:
+        return f"{pad}(空)"
+    if not isinstance(node, dict):
+        return f"{pad}{node}"
+    op = node.get("op") or node.get("node") or "node"
+    detail = _plan_detail(node)
+    line = f"{pad}{op}" + (f"  {detail}" if detail else "")
+    parts = [line]
+    for key in ("child", "left", "right"):
+        child = node.get(key)
+        if isinstance(child, dict):
+            if key != "child":
+                parts.append(f"{pad}  [{key}]")
+            parts.append(format_plan_tree(child, indent + 1))
+    return "\n".join(parts)
+
+
+def _plan_detail(node: dict) -> str:
+    op = node.get("op")
+    if op == "SeqScan":
+        return str(node.get("table") or "")
+    if op == "Project":
+        items = node.get("items") or []
+        if items:
+            return ", ".join(str(item.get("label") or "") for item in items if isinstance(item, dict))
+        columns = node.get("columns") or []
+        names = []
+        for column in columns:
+            if isinstance(column, dict):
+                names.append(str(column.get("name") or column.get("label") or ""))
+            else:
+                names.append(str(column))
+        return ", ".join(name for name in names if name)
+    if op == "Sort":
+        bits = []
+        for key in node.get("keys") or []:
+            if not isinstance(key, dict):
+                continue
+            expr = key.get("expr") if isinstance(key.get("expr"), dict) else {}
+            name = expr.get("name") or expr.get("op") or ""
+            bits.append(f"{name} {'DESC' if key.get('descending') else 'ASC'}".strip())
+        return ", ".join(bits)
+    if op == "NestedLoopJoin":
+        return "INNER"
+    if op == "Aggregate":
+        names = [
+            str(item.get("function") or "")
+            for item in (node.get("aggregates") or [])
+            if isinstance(item, dict)
+        ]
+        return ", ".join(name for name in names if name)
+    if op == "Update":
+        return str(node.get("table") or "")
+    return str(node.get("table") or "")
+
+
 def serialize_result(result: StmtResult) -> dict:
     exec_result = result.exec_result
     execution = None
@@ -37,6 +126,7 @@ def serialize_result(result: StmtResult) -> dict:
         "error": result.error,
         "semantic_ok": result.semantic_ok,
         "tokens": result.tokens,
+        "span": token_span(result.tokens),
         "ast": result.ast,
         "plan": plans[0] if plans else None,
         "opt_plan": plans[1] if len(plans) > 1 else None,
