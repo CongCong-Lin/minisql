@@ -25,6 +25,10 @@ python -m tools.case_runner --suite all
 
 `database` 模式执行数据操作，`compiler` 模式展示编译结果并仅提交 CREATE 的目录。每条 SQL 以分号结束。默认展示 Token、AST、原始及优化计划，使用 `--no-tokens --no-ast --no-plan --no-opt-plan` 简化输出。
 
+SQL 文件和标准输入统一使用 UTF-8。通过管道输入时，发送端也应输出 UTF-8 字节；无效编码会返回 `[IO]` 错误和退出码 2，不会打开或修改数据库。
+
+表达式支持最多 64 层括号与 NOT 混合嵌套，表达式树深度最多 128 层（叶子计为 1 层）。超限返回带位置的语法错误，当前语句不执行，后续分号语句继续处理；不会修改 Python 的全局递归设置。
+
 可重复运行的完整演示：
 
 ```powershell

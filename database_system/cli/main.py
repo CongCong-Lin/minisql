@@ -42,8 +42,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _read_sql(path: str | None) -> str:
-    """从 UTF-8 文件或标准输入读取完整 SQL 文本。"""
+    """严格按 UTF-8 读取文件或标准输入，文本替身流保持原样。"""
     if path is None:
+        # Windows 管道的默认编码可能是 GBK，不能用它解释 UTF-8 SQL。
+        # 显式严格解码，避免环境中的 replace/surrogateescape 静默改写数据。
+        reconfigure = getattr(sys.stdin, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="strict")
         return sys.stdin.read()
     return Path(path).read_text(encoding="utf-8-sig")
 

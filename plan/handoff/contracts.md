@@ -168,6 +168,8 @@ SELECT * FROM t3;
 
 `parse(tokens: list[Token]) -> list[Stmt]` 使用递归下降；基础分支采用单 Token lookahead，聚合调用与限定星号使用有限的额外前瞻。输入允许多个完整语句；第一个语法错误即抛 `ParserError`。跨错误继续执行是 `run()` 的职责。
 
+表达式资源边界：括号和 NOT 在同一递归路径上合计最多 64 层；表达式树深度最多 128 层，叶子计为 1 层。前者在递归进入前检查，后者在返回 AST 前用显式栈检查，覆盖 WHERE、ON、HAVING 和 UPDATE 赋值。超限抛带触发节点行列位置的 ParserError，当前语句不执行，后续分号语句继续；合法边界应支持 AST 序列化、优化、执行及 JSON 输出。
+
 - `peek()` 不消费，`advance()` 消费，`expect(type, lexeme?)` 失败时不消费当前 Token。
 - 非终结符入口无法选择分支：expected 取该非终结符的 FIRST 集。
 - 产生式中途 `expect()` 失败：expected 取正在匹配的终结符，例如 `SELECT * t;` 期待 FROM，语句尾期待 `';'`。
@@ -460,6 +462,7 @@ python -m cli.main [文件.sql] --mode compiler|database --data-dir 路径
 - `--mode` 缺省为 database；compiler 使用 JSON 目录，database 使用页存储。阶段一必须显式选择 compiler，不根据 NotImplementedError 自动猜测模式。
 - `--data-dir` 缺省为当前工作目录的 data，解析成绝对路径；正式结果不打印此路径。
 - 文件或 stdin 读取完整 UTF-8 文本直到 EOF，允许起始 BOM。通过 tokenize 统一换行；无参数时不进入 REPL、不输出提示符。
+- stdin 明确使用 UTF-8 严格解码，不依赖 Windows 默认代码页或 PYTHONIOENCODING 的替换策略；发送端须提供 UTF-8 字节。无效编码按输入读取故障返回 `[IO]` 和退出码 2，并在打开数据库前结束。
 - `--tokens --ast --plan --opt-plan` 四项默认开启；同时提供 `--no-tokens --no-ast --no-plan --no-opt-plan`，重复指定最后一个生效。
 - 每条语句展示已完成阶段，随后展示该条错误，继续展示下一条。全部结果处理完才决定退出码；空输入无输出且退出 0。
 

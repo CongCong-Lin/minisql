@@ -1,13 +1,20 @@
 """B 负责：递归下降入口，跨分段恢复由 runtime 负责。"""
 
+from collections.abc import Callable
+from dataclasses import fields
 import math
 from sql_compiler.ast_nodes import (
     BinaryExpr, ColumnDef, CreateTableStmt, DeleteStmt, IdentifierExpr,
-    InsertStmt, LiteralExpr, SelectStmt, Stmt, UnaryExpr,
+    Expr, InsertStmt, LiteralExpr, Node, SelectStmt, Stmt, UnaryExpr,
     AggregateExpr, Assignment, JoinClause, OrderItem, SelectItem, UpdateStmt,
 )
 from sql_compiler.errors import ParserError
 from sql_compiler.lexer import Token, TokenType
+
+
+# 分别约束递归下降的调用深度和后续序列化、优化需要遍历的树深度。
+MAX_EXPRESSION_NESTING = 64
+MAX_EXPRESSION_DEPTH = 128
 
 
 def parse(tokens: list[Token]) -> list[Stmt]:
@@ -22,6 +29,7 @@ class _Parser:
     def __init__(self, tokens: list[Token]) -> None:
         self.tokens = tokens
         self.index = 0
+        self._expression_nesting = 0
 
     def peek(self) -> Token:
         return self.tokens[self.index]
@@ -83,8 +91,41 @@ class _Parser:
                 unsupported = token.lexeme.upper() if token.type is TokenType.KEYWORD else None
                 self._error(self.FIRST_STATEMENT, token,
                             f"statement not supported: {unsupported}" if unsupported else "")
-            result.append(self.statement())
+            stmt = self.statement()
+            self._check_expression_depth(stmt)
+            result.append(stmt)
         return result
+
+    def _check_expression_depth(self, stmt: Stmt) -> None:
+        """返回 AST 前用显式栈检查长条件链，避免序列化阶段递归溢出。"""
+        pending = [(stmt, 0)]
+        while pending:
+            node, parent_depth = pending.pop()
+            depth = parent_depth + 1 if isinstance(node, Expr) else 0
+            if depth > MAX_EXPRESSION_DEPTH:
+                raise ParserError(node.line, node.column,
+                                  f"表达式树深度不能超过 {MAX_EXPRESSION_DEPTH} 层")
+            children = []
+            for member in fields(node):
+                if not member.metadata.get("serialize", True):
+                    continue
+                value = getattr(node, member.name)
+                if isinstance(value, Node):
+                    children.append(value)
+                elif isinstance(value, list):
+                    children.extend(item for item in value if isinstance(item, Node))
+            pending.extend((child, depth) for child in reversed(children))
+
+    def _nested_expression(self, token: Token, parse_operand: Callable[[], Expr]) -> Expr:
+        """括号和 NOT 共用嵌套预算，超限时保留触发位置。"""
+        if self._expression_nesting >= MAX_EXPRESSION_NESTING:
+            raise ParserError(token.line, token.column,
+                              f"表达式括号和 NOT 的嵌套不能超过 {MAX_EXPRESSION_NESTING} 层")
+        self._expression_nesting += 1
+        try:
+            return parse_operand()
+        finally:
+            self._expression_nesting -= 1
 
     def statement(self) -> Stmt:
         word = self.peek().lexeme.upper()
@@ -304,40 +345,58 @@ class _Parser:
             reason = "float literal out of range" if "." in raw else "integer literal out of range"
             raise ParserError(token.line, token.column, reason)
 
-    def expression(self): return self.or_expr()
-    def or_expr(self):
+    def expression(self) -> Expr:
+        return self.or_expr()
+
+    def or_expr(self) -> Expr:
         left = self.and_expr()
         while self.match_keyword("OR"):
-            op = self.tokens[self.index - 1]; left = BinaryExpr("OR", left, self.and_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            left = BinaryExpr("OR", left, self.and_expr(), line=op.line, column=op.column)
         return left
-    def and_expr(self):
+
+    def and_expr(self) -> Expr:
         left = self.not_expr()
         while self.match_keyword("AND"):
-            op = self.tokens[self.index - 1]; left = BinaryExpr("AND", left, self.not_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            left = BinaryExpr("AND", left, self.not_expr(), line=op.line, column=op.column)
         return left
-    def not_expr(self):
+
+    def not_expr(self) -> Expr:
         if self.match_keyword("NOT"):
-            op = self.tokens[self.index - 1]; return UnaryExpr("NOT", self.not_expr(), line=op.line, column=op.column)
+            op = self.tokens[self.index - 1]
+            operand = self._nested_expression(op, self.not_expr)
+            return UnaryExpr("NOT", operand, line=op.line, column=op.column)
         return self.comparison()
-    def comparison(self):
+
+    def comparison(self) -> Expr:
         left = self.arith_expr()
         if self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"=", "!=", ">", ">=", "<", "<="}:
-            op = self.advance(); return BinaryExpr(op.lexeme, left, self.arith_expr(), line=op.line, column=op.column)
+            op = self.advance()
+            return BinaryExpr(op.lexeme, left, self.arith_expr(), line=op.line, column=op.column)
         return left
-    def arith_expr(self):
+
+    def arith_expr(self) -> Expr:
         left = self.term()
         while self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"+", "-"}:
-            op = self.advance(); left = BinaryExpr(op.lexeme, left, self.term(), line=op.line, column=op.column)
+            op = self.advance()
+            left = BinaryExpr(op.lexeme, left, self.term(), line=op.line, column=op.column)
         return left
-    def term(self):
+
+    def term(self) -> Expr:
         left = self.factor()
         while self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"*", "/"}:
-            op = self.advance(); left = BinaryExpr(op.lexeme, left, self.factor(), line=op.line, column=op.column)
+            op = self.advance()
+            left = BinaryExpr(op.lexeme, left, self.factor(), line=op.line, column=op.column)
         return left
-    def factor(self):
+
+    def factor(self) -> Expr:
         token = self.peek()
         if token.type is TokenType.IDENTIFIER:
             return self.column_or_aggregate()
         if token.type is TokenType.DELIMITER and token.lexeme == "(":
-            self.advance(); value = self.expression(); self.expect(TokenType.DELIMITER, ")"); return value
+            self.advance()
+            value = self._nested_expression(token, self.expression)
+            self.expect(TokenType.DELIMITER, ")")
+            return value
         return self.literal()
