@@ -87,7 +87,7 @@ def test_memory_names_order_and_defensive_copies():
 @pytest.mark.parametrize("name,cols", [
     ("t", []), ("SELECT", columns()), ("__CATALOG__", columns()),
     ("汉字", columns()), ("a" * 65, columns()), ("1table", columns()),
-    ("t", [ColumnDef("a", "FLOAT", line=1, column=1)]),
+    ("t", [ColumnDef("a", "UNSUPPORTED", line=1, column=1)]),
     ("t", [ColumnDef("a", "INT", line=1, column=1),
            ColumnDef("A", "INT", line=1, column=10)]),
     ("t", [ColumnDef("FROM", "INT", line=1, column=1)]),
@@ -203,7 +203,7 @@ def test_corrupt_json_schema_rejected(tmp_path, mutation):
     elif mutation == "duplicate_column":
         table["columns"][1]["name"] = "ID"
     elif mutation == "type":
-        table["columns"][0]["col_type"] = "FLOAT"
+        table["columns"][0]["col_type"] = "UNSUPPORTED"
     elif mutation == "position":
         table["columns"][0]["line"] = False
     else:
@@ -330,7 +330,7 @@ def test_corrupt_system_catalog_rejected(fault):
     elif fault == "duplicate":
         storage.rows *= 2
     elif fault == "wrong_type":
-        storage.rows = [("T", "a", "FLOAT", 0, 1, 1)]
+        storage.rows = [("T", "a", "UNSUPPORTED", 0, 1, 1)]
     elif fault == "wrong_position":
         storage.rows = [("T", "a", "INT", 0, 0, 1)]
     elif fault == "reserved_table":

@@ -29,6 +29,10 @@ def inspect_sql(text: str, catalog: Catalog | None = None) -> list[Diagnostic]:
     """用目录快照编译全部语句，不写入真实 Catalog / 存储。"""
     from engine.runtime import _compile_segment, _scan_and_segment
 
+    session = getattr(catalog, "_session", None)
+    if session is not None:
+        return session.inspect(text)
+
     if not text.strip():
         return []
     working = catalog.snapshot() if catalog is not None else Catalog()

@@ -65,13 +65,12 @@ def test_parser_converts_literals_and_preserves_positions():
     assert stmt.values[1] == LiteralExpr("A'B", "VARCHAR", line=1, column=35)
 
 
-def test_parser_rejects_null_and_out_of_range_integer():
+def test_parser_accepts_null_and_rejects_out_of_range_integer():
     null_tokens = [
         _kw("SELECT", 1), _op("*", 8), _kw("FROM", 10), _id("t", 15),
         _kw("WHERE", 17), _kw("NULL", 23), _delim(";", 27), _eof(28),
     ]
-    with pytest.raises(ParserError, match="NULL is not supported"):
-        parse(null_tokens)
+    assert parse(null_tokens)[0].where.value is None
 
     integer_tokens = [
         _kw("INSERT", 1), _kw("INTO", 8), _id("t", 13), _delim("(", 14),

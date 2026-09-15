@@ -89,11 +89,18 @@ def test_demo_refuses_existing_directory(tmp_path):
     assert list(tmp_path.iterdir()) == [marker]
 
 
-def test_open_baseline_v1_database_and_update_without_migration(tmp_path):
+def test_migrated_baseline_database_and_update(tmp_path):
     fixture = json.loads((ROOT / "tests" / "fixtures" / "v1_database.json").read_text(encoding="utf-8"))
     data = zlib.decompress(base64.b64decode(fixture["zlib_base64"]))
     assert hashlib.sha256(data).hexdigest() == fixture["sha256"]
     (tmp_path / "minisql.db").write_bytes(data)
+    rejected = cli(tmp_path, "SELECT * FROM legacy;")
+    assert rejected.returncode == 2 and "MIGRATION_REQUIRED" in rejected.stderr
+    from tools.migrate import migrate
+    destination = tmp_path.parent / (tmp_path.name + "-v2")
+    migrate(tmp_path, destination)
+    assert (tmp_path / "minisql.db").read_bytes() == data
+    tmp_path = destination
     before = cli(tmp_path, "SELECT * FROM legacy ORDER BY id;")
     assert before.returncode == 0, before.stderr + before.stdout
     assert collect_output(before.stdout)[0] == [{"columns": ["id", "count", "asc"],
@@ -102,4 +109,4 @@ def test_open_baseline_v1_database_and_update_without_migration(tmp_path):
     assert updated.returncode == 0, updated.stderr + updated.stdout
     later = cli(tmp_path, "SELECT id,count,asc FROM legacy ORDER BY id;")
     assert collect_output(later.stdout)[0][0]["rows"] == [[1, "扩展更新后的记录", 11], [2, "另一条", 20]]
-    assert (tmp_path / "minisql.db").read_bytes()[:6] == data[:6]
+    assert (tmp_path / "minisql.db").read_bytes()[:6] == b"MSQL\x02\x00"

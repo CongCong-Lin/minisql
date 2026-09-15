@@ -36,6 +36,7 @@ def _execute_create(plan: dict, catalog: Catalog) -> ExecuteResult:
     columns = [
         ColumnDef(
             item["name"], item["type"],
+            nullable=item.get("nullable", True),
             line=item["line"], column=item["column"],
         )
         for item in plan["columns"]
@@ -104,8 +105,11 @@ def _scan(plan: dict, catalog: Catalog, storage: StorageEngine
           ) -> list[tuple[RecordId, tuple, list[ColumnDef]]]:
     """扫描或过滤，内部保留记录标识和完整行。"""
     op = plan.get("op")
-    if op == "SeqScan":
+    if op in {"SeqScan", "IndexScan"}:
         schema = _require_table(catalog, plan["table"])
+        if op == "IndexScan":
+            from engine.physical import scan_index
+            return [(rid, row, schema["columns"]) for rid, row in scan_index(plan, storage, schema["columns"])]
         return [
             (rid, row, schema["columns"])
             for rid, row in storage.scan_records(plan["table"], schema["columns"])
@@ -113,7 +117,7 @@ def _scan(plan: dict, catalog: Catalog, storage: StorageEngine
     if op == "Filter":
         kept = []
         for rid, row, columns in _scan(plan["child"], catalog, storage):
-            if evaluate(plan["predicate"], row, columns):
+            if evaluate(plan["predicate"], row, columns) is True:
                 kept.append((rid, row, columns))
         return kept
     raise ExecuteError(f"unsupported scan operator '{op}'")

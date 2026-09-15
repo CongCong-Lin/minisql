@@ -33,6 +33,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("sql_file", nargs="?", help="SQL 文件路径；省略时从 stdin 读取")
     parser.add_argument("--mode", choices=("compiler", "database"), default="database")
     parser.add_argument("--data-dir", default=None, help="数据库目录，默认当前目录/data")
+    parser.add_argument("--user", help="数据库用户名；密码在终端隐藏输入")
+    parser.add_argument("--lock-timeout", type=float, default=5, help="数据库锁等待秒数")
     # 同一 dest 的正、负开关按参数出现顺序处理，因此最后一次指定生效。
     for name, dest in (("tokens", "show_tokens"), ("ast", "show_ast"),
                        ("plan", "show_plan"), ("opt-plan", "show_opt_plan")):
@@ -109,12 +111,25 @@ def main(argv: list[str] | None = None) -> int:
     sql_failed = False
     close_failed = False
     try:
-        catalog, storage = open_database(str(data_dir), mode=args.mode)
+        options = {}
+        if args.user:
+            from getpass import getpass
+            options.update(username=args.user, password=getpass("数据库密码："))
+        if args.lock_timeout != 5:
+            options["timeout"] = args.lock_timeout
+        catalog, storage = open_database(str(data_dir), mode=args.mode, **options)
         results = run(text, catalog, storage)
         for result in results:
             _print_stmt(result, args, out=sys.stdout)
             if not result.ok:
                 sql_failed = True
+        session = getattr(catalog, "_session", None)
+        if session is not None and session.state in {"active", "failed"}:
+            session.rollback()
+            print("[TRANSACTION_STATE] 输入结束时事务未提交，已回滚", file=sys.stderr)
+            sql_failed = True
+        if any(getattr(item, "error_code", None) in {"IO", "COMMIT_UNKNOWN", "RECOVERY_FAILED"} for item in results):
+            close_failed = True
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         # close_database 仍在 finally 中执行；先保留环境错误状态。

@@ -321,7 +321,7 @@ def test_error_reason_escapes_newlines(monkeypatch):
 
 def test_open_database_rejects_unknown_mode():
     """生命周期只接受 compiler 与 database。"""
-    with pytest.raises(ExecuteError, match="unsupported mode"):
+    with pytest.raises(ExecuteError, match="不支持的运行模式"):
         runtime.open_database("data", mode="hybrid")
 
 
@@ -366,7 +366,7 @@ def test_open_database_new_db_creates_system_catalog(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime, "PageStore", StubPages)
     monkeypatch.setattr(runtime, "StorageEngine", StubStorage)
     monkeypatch.setattr(runtime, "Catalog", StubCatalog)
-    catalog, storage = runtime.open_database(str(tmp_path), mode="database")
+    catalog, storage = runtime._open_legacy_database(str(tmp_path), mode="database")
     assert created == ["__catalog__", "flush"]
     assert catalog.storage is storage
 
@@ -400,7 +400,7 @@ def test_open_database_existing_file_does_not_recreate_catalog(tmp_path, monkeyp
     monkeypatch.setattr(runtime, "PageStore", StubPages)
     monkeypatch.setattr(runtime, "StorageEngine", StubStorage)
     monkeypatch.setattr(runtime, "Catalog", StubCatalog)
-    runtime.open_database(str(tmp_path), mode="database")
+    runtime._open_legacy_database(str(tmp_path), mode="database")
     assert created == []
 
 
@@ -425,7 +425,7 @@ def test_open_database_closes_storage_on_bootstrap_failure(tmp_path, monkeypatch
     monkeypatch.setattr(runtime, "PageStore", StubPages)
     monkeypatch.setattr(runtime, "StorageEngine", StubStorage)
     with pytest.raises(ExecuteError, match="disk full"):
-        runtime.open_database(str(tmp_path), mode="database")
+        runtime._open_legacy_database(str(tmp_path), mode="database")
     assert closed == [True]
 
 

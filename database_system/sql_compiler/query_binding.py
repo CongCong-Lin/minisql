@@ -8,7 +8,7 @@ from sql_compiler.ast_nodes import (
     AggregateExpr, BinaryExpr, IdentifierExpr, LiteralExpr, SelectItem, SelectStmt, UnaryExpr,
 )
 from sql_compiler.errors import SemanticError
-from sql_compiler.types import expression_type, MAX_VARCHAR_BYTES
+from sql_compiler.types import expression_type, MAX_VARCHAR_BYTES, insert_type_matches
 
 _NUMERIC = {"INT", "BIGINT", "FLOAT"}
 _COMPARISONS = {"=", "!=", "<", "<=", ">", ">="}
@@ -63,7 +63,7 @@ def bind_update(stmt, catalog) -> dict:
         index, wanted = known[assignment.name.lower()]
         try:
             value = binder.expression(assignment.value)
-            if value["value_type"] != wanted:
+            if not insert_type_matches(wanted, value["value_type"]):
                 raise _error(assignment.value,
                              f"列 {assignment.name} 需要 {wanted}，实际为 {value['value_type']}")
             assignments.append({"index": index, "expr": value})
@@ -152,9 +152,9 @@ class _Binder:
         if argument is None and function != "COUNT":
             raise _error(expr, "只有 COUNT 可以使用星号参数")
         arg_type = argument["value_type"] if argument else None
-        if function in {"SUM", "AVG"} and arg_type != "INT":
-            raise _error(expr, f"{function} 只接受 INT 列")
-        value_type = ("BIGINT" if function in {"COUNT", "SUM"}
+        if function in {"SUM", "AVG"} and arg_type not in {"INT", "FLOAT"}:
+            raise _error(expr, f"{function} 只接受 INT 或 FLOAT 列")
+        value_type = ("FLOAT" if function == "SUM" and arg_type == "FLOAT" else "BIGINT" if function in {"COUNT", "SUM"}
                       else "FLOAT" if function == "AVG" else arg_type)
         key = (function, argument["index"] if argument else None)
         if key not in self.aggregate_positions:
@@ -198,7 +198,8 @@ class _Binder:
                 if grouped and left_type in _NUMERIC and right_type in _NUMERIC:
                     if node.op in _COMPARISONS:
                         value_type = "BOOL"
-                    elif node.op in {"+", "-", "*", "/"}:
+                    elif node.op in {"+", "-", "*", "/"} and "BIGINT" in {left_type, right_type}:
+                        # 只有聚合结果这类宽整数才走 64 位；普通 INT 表达式保持 32 位受检运算。
                         value_type = "FLOAT" if "FLOAT" in {left_type, right_type} else "BIGINT"
                 if value_type is None:
                     raise _error(node, f"运算符 {node.op} 不支持类型 {left_type} 和 {right_type}")
@@ -218,7 +219,7 @@ class _Binder:
         if expr is None:
             return None
         bound = self.expression(expr, grouped=grouped, aliases=aliases)
-        if bound["value_type"] != "BOOL":
+        if bound["value_type"] not in {"BOOL", "NULL"}:
             raise _error(expr, f"{label} 条件必须为 BOOL")
         return bound
 

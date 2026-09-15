@@ -7,6 +7,53 @@ import pytest
 from studio.inspect import inspect_sql
 from studio.session import StudioSession, format_cell, format_plan_tree, token_span
 
+
+def test_async_window_remains_responsive_while_waiting_for_lock(tmp_path, monkeypatch):
+    import time
+    from engine.session import connect
+    pytest.importorskip("tkinter")
+    from studio.app import StudioApp
+    try:
+        app = StudioApp()
+    except Exception as exc:
+        pytest.skip(f"当前环境无法创建 Tk 窗口：{exc}")
+    app.withdraw()
+    errors = []
+    monkeypatch.setattr("studio.app.messagebox.showerror", lambda *args, **kwargs: errors.append(args))
+    monkeypatch.setattr(app, "_schedule_inspect", lambda: None)
+    def drain():
+        deadline = time.monotonic() + 8
+        while app._busy and time.monotonic() < deadline:
+            app.update()
+            time.sleep(0.005)
+        assert not app._busy and not errors
+    blocker = None
+    try:
+        app.dir_var.set(str(tmp_path))
+        app.connect()
+        drain()
+        app._run_and_show("CREATE TABLE t(id INT); INSERT INTO t(id) VALUES(1); CREATE INDEX ix ON t(id);")
+        drain()
+        blocker = connect(tmp_path)
+        blocker.begin()
+        ticks = []
+        def release():
+            ticks.append("窗口事件已处理")
+            blocker.rollback()
+        app.after(120, release)
+        app._run_and_show("SELECT * FROM t;")
+        drain()
+        assert ticks and "Indexes" in [app.nb.tab(tab, "text") for tab in app.nb.tabs()]
+        app._run_and_show("BEGIN; UPDATE t SET id=2; ROLLBACK; SELECT * FROM t;")
+        drain()
+        assert app.session.backend.state == "idle"
+    finally:
+        if blocker is not None:
+            blocker.close()
+        app._worker.submit(app.session.close).result(timeout=8)
+        app._worker.shutdown(wait=True)
+        app.destroy()
+
 def test_inspect_sql_marks_unknown_table_and_keeps_catalog():
     diags = inspect_sql("SELECT * FROM nosuch;")
     assert diags
@@ -76,7 +123,7 @@ def test_desktop_window_crud(tmp_path):
     pytest.importorskip("tkinter")
     try:
         from studio.app import StudioApp
-        app = StudioApp()
+        app = StudioApp(async_operations=False)
     except Exception as exc:
         pytest.skip(f"当前环境无法创建 Tk 窗口: {exc}")
     try:

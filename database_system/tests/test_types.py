@@ -16,10 +16,14 @@ from sql_compiler.types import (
 )))
 def test_type_matrix(op, left, right):
     """枚举契约中的合法行，其他组合必须拒绝。"""
-    arithmetic = {(symbol, "INT", "INT"): "INT" for symbol in "+-*/"}
+    arithmetic = {(symbol, a, b): "FLOAT" if "FLOAT" in {a, b} else "INT"
+                  for symbol in "+-*/" for a in ("INT", "FLOAT") for b in ("INT", "FLOAT")}
     comparisons = {(symbol, kind, kind): "BOOL"
                    for symbol in ("=", "!=", ">", ">=", "<", "<=")
                    for kind in ("INT", "VARCHAR")}
+    comparisons.update({(symbol, a, b): "BOOL" for symbol in ("=", "!=", ">", ">=", "<", "<=")
+                        for a in ("INT", "FLOAT") for b in ("INT", "FLOAT")})
+    comparisons.update({(symbol, "BOOL", "BOOL"): "BOOL" for symbol in ("=", "!=")})
     logical = {("AND", "BOOL", "BOOL"): "BOOL", ("OR", "BOOL", "BOOL"): "BOOL"}
     assert expression_type(op, left, right) == (arithmetic | comparisons | logical).get(
         (op, left, right))
@@ -31,7 +35,7 @@ def test_not_and_insert_rules(kind):
     assert expression_type("NOT", kind, kind) is None
     assert insert_type_matches("INT", kind) == (kind == "INT")
     assert insert_type_matches("VARCHAR", kind) == (kind == "VARCHAR")
-    assert not insert_type_matches("BOOL", kind)
+    assert insert_type_matches("BOOL", kind) == (kind == "BOOL")
 
 
 @pytest.mark.parametrize("op,left,right,wanted", [

@@ -1,5 +1,7 @@
 # MiniSQL 文法（v1.6）
 
+> 当前第二版新增文法见文末“第二版增量文法”，其中类型与控制语句规则覆盖旧版限制。
+
 以下为基础功能与可选扩展的统一文法。花括号表示重复，方括号表示可选。
 
 ```ebnf
@@ -58,3 +60,25 @@ factor         -> column_ref | aggregate | literal | '(' expression ')' ;
 - 不支持外连接、USING、NATURAL JOIN、逗号连接、子查询、DISTINCT、DROP TABLE、NULL 输入、默认值、普通 SELECT 列表算术表达式或 VARCHAR 长度参数。
 
 详细行为、计划结构和 UI 兼容说明见 [扩展说明](docs/extensions.md)。
+# 第二版增量文法
+
+以下规则补充并覆盖下文旧版类型限制。控制词在相关语法位置识别，不额外禁止旧的普通标识符名称。
+
+```ebnf
+type = INT | VARCHAR | FLOAT | BOOL | DATE ;
+column = identifier type [ NOT NULL ] ;
+literal = integer | float | string | TRUE | FALSE | NULL | DATE string ;
+null_test = expression IS [ NOT ] NULL ;
+transaction = BEGIN [ READ ONLY ] | COMMIT | ROLLBACK ;
+index = CREATE INDEX identifier ON identifier '(' identifier ')'
+      | DROP INDEX identifier ;
+statistics = ANALYZE identifier ;
+explain = EXPLAIN [ FORMAT JSON ] (select | insert | update | delete) ;
+role = CREATE ROLE identifier | DROP ROLE identifier ;
+membership = GRANT identifier TO identifier | REVOKE identifier FROM identifier ;
+privilege = (GRANT | REVOKE) permission { ',' permission }
+            ON (identifier | DATABASE) (TO | FROM) identifier ;
+permission = SELECT | INSERT | UPDATE | DELETE | CREATE ;
+```
+
+所有语句以分号结束。GRANT 配 TO，REVOKE 配 FROM；DATABASE 目标只允许 CREATE，表目标允许四种数据权限。INSERT 仍须显式列清单。DATE 字符串为真实的 `YYYY-MM-DD` 日期，不隐式把 VARCHAR 转为日期。布尔值与整数类型分离，NULL 采用三值逻辑，FLOAT 仅接受有限双精度数。

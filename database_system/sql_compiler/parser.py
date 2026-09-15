@@ -6,7 +6,7 @@ import math
 from sql_compiler.ast_nodes import (
     BinaryExpr, ColumnDef, CreateTableStmt, DeleteStmt, IdentifierExpr,
     Expr, InsertStmt, LiteralExpr, Node, SelectStmt, Stmt, UnaryExpr,
-    AggregateExpr, Assignment, JoinClause, OrderItem, SelectItem, UpdateStmt,
+    AggregateExpr, Assignment, JoinClause, OrderItem, SelectItem, UpdateStmt, ControlStmt,
 )
 from sql_compiler.errors import ParserError
 from sql_compiler.lexer import Token, TokenType
@@ -23,7 +23,8 @@ def parse(tokens: list[Token]) -> list[Stmt]:
 
 
 class _Parser:
-    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT", "UPDATE"}
+    FIRST_STATEMENT = {"CREATE", "DELETE", "INSERT", "SELECT", "UPDATE", "DROP",
+                       "BEGIN", "COMMIT", "ROLLBACK", "EXPLAIN", "ANALYZE", "GRANT", "REVOKE"}
     FIRST_FACTOR = {"IDENTIFIER", "CONST", "'('"}
 
     def __init__(self, tokens: list[Token]) -> None:
@@ -86,7 +87,7 @@ class _Parser:
     def parse(self) -> list[Stmt]:
         result = []
         while self.peek().type is not TokenType.EOF:
-            if self.peek().type is not TokenType.KEYWORD or self.peek().lexeme.upper() not in self.FIRST_STATEMENT:
+            if self.peek().type not in {TokenType.KEYWORD, TokenType.IDENTIFIER} or self.peek().lexeme.upper() not in self.FIRST_STATEMENT:
                 token = self.peek()
                 unsupported = token.lexeme.upper() if token.type is TokenType.KEYWORD else None
                 self._error(self.FIRST_STATEMENT, token,
@@ -129,6 +130,8 @@ class _Parser:
 
     def statement(self) -> Stmt:
         word = self.peek().lexeme.upper()
+        if word not in {"CREATE", "INSERT", "SELECT", "UPDATE", "DELETE"}:
+            return self.control_stmt()
         if word == "CREATE": return self.create_stmt()
         if word == "INSERT": return self.insert_stmt()
         if word == "SELECT": return self.select_stmt()
@@ -143,6 +146,20 @@ class _Parser:
 
     def create_stmt(self) -> CreateTableStmt:
         start = self.expect(TokenType.KEYWORD, "CREATE")
+        if self.match_word("INDEX"):
+            name = self.identifier().lexeme
+            self.expect_word("ON")
+            table = self.identifier().lexeme
+            self.expect(TokenType.DELIMITER, "(")
+            column = self.identifier().lexeme
+            self.expect(TokenType.DELIMITER, ")")
+            self.expect(TokenType.DELIMITER, ";")
+            return ControlStmt("CreateIndex", name=name, table=table, column_name=column,
+                               line=start.line, column=start.column)
+        if self.match_word("ROLE"):
+            name = self.identifier().lexeme
+            self.expect(TokenType.DELIMITER, ";")
+            return ControlStmt("CreateRole", name=name, line=start.line, column=start.column)
         self.expect(TokenType.KEYWORD, "TABLE")
         table = self.identifier()
         self.expect(TokenType.DELIMITER, "(")
@@ -156,10 +173,61 @@ class _Parser:
     def column_def(self) -> ColumnDef:
         name = self.identifier()
         token = self.peek()
-        if token.type is not TokenType.KEYWORD or token.lexeme.upper() not in {"INT", "VARCHAR"}:
-            self._error({"INT", "VARCHAR"}, token)
+        kinds = {"INT", "VARCHAR", "FLOAT", "BOOL", "DATE"}
+        if token.type not in {TokenType.KEYWORD, TokenType.IDENTIFIER} or token.lexeme.upper() not in kinds:
+            self._error(kinds, token)
         self.advance()
-        return ColumnDef(name.lexeme, token.lexeme.upper(), line=name.line, column=name.column)
+        nullable = True
+        if self.match_keyword("NOT"):
+            self.expect_word("NULL")
+            nullable = False
+        return ColumnDef(name.lexeme, token.lexeme.upper(), nullable=nullable, line=name.line, column=name.column)
+
+    def control_stmt(self):
+        start = self.advance()
+        word = start.lexeme.upper()
+        node = ControlStmt(word.title(), line=start.line, column=start.column)
+        if word == "BEGIN":
+            if self.match_word("READ"):
+                self.expect_word("ONLY")
+                node.readonly = True
+        elif word == "EXPLAIN":
+            if self.match_word("FORMAT"):
+                if not (self.is_word("TEXT") or self.is_word("JSON")):
+                    self._error({"TEXT", "JSON"})
+                node.format = self.advance().lexeme.upper()
+            if self.peek().lexeme.upper() not in {"SELECT", "INSERT", "UPDATE", "DELETE"}:
+                self._error({"SELECT", "INSERT", "UPDATE", "DELETE"})
+            node.statement = self.statement()
+            return node
+        elif word == "ANALYZE":
+            node.table = self.identifier().lexeme
+        elif word == "DROP":
+            if self.match_word("INDEX"):
+                node.action = "DropIndex"
+            else:
+                self.expect_word("ROLE")
+                node.action = "DropRole"
+            node.name = self.identifier().lexeme
+        elif word in {"GRANT", "REVOKE"}:
+            permission_words = {"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE"}
+            if self.peek().lexeme.upper() in permission_words:
+                while True:
+                    if self.peek().lexeme.upper() not in permission_words:
+                        self._error(permission_words)
+                    node.permissions.append(self.advance().lexeme.upper())
+                    if not self.match_delimiter(","):
+                        break
+                self.expect_word("ON")
+                if not self.match_word("DATABASE"):
+                    self.match_word("TABLE")
+                    node.table = self.identifier().lexeme
+            else:
+                node.name = self.identifier().lexeme
+            self.expect_word("TO" if word == "GRANT" else "FROM")
+            node.subject = self.identifier().lexeme
+        self.expect(TokenType.DELIMITER, ";")
+        return node
 
     def id_list(self) -> list[Token]:
         values = [self.identifier()]
@@ -325,7 +393,22 @@ class _Parser:
     def literal(self) -> LiteralExpr:
         token = self.peek()
         if token.type is TokenType.KEYWORD and token.lexeme.upper() == "NULL":
-            self._error({"INTEGER_CONST", "FLOAT_CONST", "STRING_CONST", "TRUE", "FALSE"}, token, "NULL is not supported")
+            self.advance()
+            return LiteralExpr(None, "NULL", line=token.line, column=token.column)
+        if self.is_word("DATE"):
+            from datetime import date
+            self.advance()
+            value = self.expect(TokenType.CONST)
+            raw = value.lexeme
+            try:
+                if len(raw) != 12 or not raw.startswith("'") or not raw.endswith("'"):
+                    raise ValueError
+                parsed = date.fromisoformat(raw[1:-1])
+                if parsed.isoformat() != raw[1:-1]:
+                    raise ValueError
+            except ValueError:
+                raise ParserError(value.line, value.column, "日期必须为有效的 YYYY-MM-DD") from None
+            return LiteralExpr(parsed.isoformat(), "DATE", line=token.line, column=token.column)
         if token.type is TokenType.KEYWORD and token.lexeme.upper() in {"TRUE", "FALSE"}:
             self.advance(); return LiteralExpr(token.lexeme.upper() == "TRUE", "BOOL", line=token.line, column=token.column)
         if token.type is not TokenType.CONST:
@@ -371,6 +454,11 @@ class _Parser:
 
     def comparison(self) -> Expr:
         left = self.arith_expr()
+        if self.match_word("IS"):
+            op = self.tokens[self.index - 1]
+            negate = bool(self.match_keyword("NOT"))
+            self.expect_word("NULL")
+            return UnaryExpr("IS NOT NULL" if negate else "IS NULL", left, line=op.line, column=op.column)
         if self.peek().type is TokenType.OPERATOR and self.peek().lexeme in {"=", "!=", ">", ">=", "<", "<="}:
             op = self.advance()
             return BinaryExpr(op.lexeme, left, self.arith_expr(), line=op.line, column=op.column)
@@ -392,6 +480,8 @@ class _Parser:
 
     def factor(self) -> Expr:
         token = self.peek()
+        if self.is_word("DATE") and self.index + 1 < len(self.tokens) and self.tokens[self.index + 1].type is TokenType.CONST:
+            return self.literal()
         if token.type is TokenType.IDENTIFIER:
             return self.column_or_aggregate()
         if token.type is TokenType.DELIMITER and token.lexeme == "(":

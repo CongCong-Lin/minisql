@@ -23,3 +23,4 @@ class StmtResult:
     plans: list[dict]
     exec_result: ExecuteResult | None
     semantic_ok: bool | None
+    error_code: str | None = None

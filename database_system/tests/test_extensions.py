@@ -140,7 +140,10 @@ def test_update_growth_capacity_one_and_restart(tmp_path):
         assert rows == [(i, "z" * 255) for i in range(1, 51)]
     finally:
         close_database(catalog, storage)
-    reopened = open_database(str(tmp_path))
+    from tools.migrate import migrate
+    destination = tmp_path.parent / (tmp_path.name + "-v2")
+    migrate(tmp_path, destination)
+    reopened = open_database(str(destination))
     try:
         assert execute(reopened, "SELECT id,value FROM t ORDER BY id;").rows == rows
     finally:
@@ -153,15 +156,17 @@ def test_storage_update_rejects_invalid_rid_without_mutation(database):
     catalog, storage = database
     execute(database, "CREATE TABLE t(id INT); CREATE TABLE u(id INT);")
     columns = catalog.find_table("t")["columns"]
-    rid = storage.insert_record("t", (1,), columns)
-    other = storage.insert_record("u", (2,), columns)
-    for invalid in (None, (True, 0), (0, 0), (rid[0], -1), (rid[0], 999), other):
-        with pytest.raises(ExecuteError):
-            storage.update_record("t", invalid, (3,), columns)
-    assert list(storage.scan_records("t", columns)) == [(rid, (1,))]
-    storage.delete_record("t", rid)
-    with pytest.raises(ExecuteError, match="deleted"):
-        storage.update_record("t", rid, (3,), columns)
+    with catalog._session.transaction():
+        rid = storage.insert_record("t", (1,), columns)
+        other = storage.insert_record("u", (2,), columns)
+        for invalid in (None, (True, 0), (0, 0), (rid[0], -1), (rid[0], 999), other):
+            with pytest.raises(ExecuteError):
+                storage.update_record("t", invalid, (3,), columns)
+        assert list(storage.scan_records("t", columns)) == [(rid, (1,))]
+        storage.delete_record("t", rid)
+        with pytest.raises(ExecuteError, match="已删除"):
+            storage.update_record("t", rid, (3,), columns)
+
 
 
 @pytest.fixture
@@ -437,7 +442,8 @@ def test_growing_update_insert_failure_preserves_original_record(database, monke
     def fail(*_args):
         raise ExecuteError("模拟写入失败")
 
-    monkeypatch.setattr(storage, "insert_record", fail)
+    monkeypatch.setattr(storage, "_insert", fail)
     with pytest.raises(ExecuteError, match="模拟写入失败"):
-        storage.update_record("t", rid, ("longer",), columns)
+        with catalog._session.transaction():
+            storage.update_record("t", rid, ("longer",), columns)
     assert list(storage.scan_records("t", columns)) == [(rid, original)]

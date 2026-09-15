@@ -5,29 +5,39 @@ from sql_compiler.errors import IntegerArithmeticError
 INT_MIN = -2147483648
 INT_MAX = 2147483647
 MAX_VARCHAR_BYTES = 255
+STORAGE_TYPES = {"INT", "VARCHAR", "FLOAT", "BOOL", "DATE"}
 
 
 def expression_type(op: str, left: str, right: str | None = None) -> str | None:
     """返回运算结果类型；不支持的组合返回空值，由语义层定位。"""
+    if op in {"IS NULL", "IS NOT NULL"}:
+        return "BOOL" if right is None else None
     if op == "NOT":
-        return "BOOL" if left == "BOOL" and right is None else None
-    if op in {"+", "-", "*", "/"} and left == right == "INT":
-        return "INT"
+        return "BOOL" if left in {"BOOL", "NULL"} and right is None else None
+    if op in {"AND", "OR"}:
+        return "BOOL" if left in {"BOOL", "NULL"} and right in {"BOOL", "NULL"} else None
+    if left == "NULL":
+        left = right if right != "NULL" else "INT"
+    if right == "NULL":
+        right = left
+    if op in {"+", "-", "*", "/"} and left in {"INT", "FLOAT"} and right in {"INT", "FLOAT"}:
+        return "FLOAT" if "FLOAT" in {left, right} else "INT"
     if op in {"=", "!=", ">", ">=", "<", "<="}:
-        return "BOOL" if left == right and left in {"INT", "VARCHAR"} else None
-    if op in {"AND", "OR"} and left == right == "BOOL":
-        return "BOOL"
+        if left in {"INT", "FLOAT"} and right in {"INT", "FLOAT"}:
+            return "BOOL"
+        return "BOOL" if left == right and (left in {"VARCHAR", "DATE"} or left == "BOOL" and op in {"=", "!="}) else None
     return None
 
 
 def insert_type_matches(target: str, value_type: str) -> bool:
-    """插入仅允许两种存储类型的精确匹配。"""
-    return target in {"INT", "VARCHAR"} and target == value_type
+    """存储类型精确匹配，另允许空值和整数提升为浮点。"""
+    return target in STORAGE_TYPES and (value_type == "NULL" or target == value_type
+                                        or target == "FLOAT" and value_type == "INT")
 
 
 def is_boolean(type_name: str) -> bool:
     """WHERE 必须具有显式布尔类型。"""
-    return type_name == "BOOL"
+    return type_name in {"BOOL", "NULL"}
 
 
 def checked_int_arithmetic(op: str, left: int, right: int) -> int:

@@ -54,6 +54,9 @@ def token_span(tokens: list | None) -> dict | None:
 def format_plan_tree(node, indent: int = 0) -> str:
     """按 child / left / right 展开计划树，覆盖连接、排序、聚合与更新。"""
     pad = "  " * indent
+    if isinstance(node, dict) and ("estimated_cost" in node or node.get("op") == "IndexScan"):
+        from engine.physical import format_plan
+        return format_plan(node, indent)
     if node is None:
         return f"{pad}(空)"
     if not isinstance(node, dict):
@@ -124,6 +127,7 @@ def serialize_result(result: StmtResult) -> dict:
     return {
         "ok": result.ok,
         "error": result.error,
+        "error_code": result.error_code,
         "semantic_ok": result.semantic_ok,
         "tokens": result.tokens,
         "span": token_span(result.tokens),
@@ -145,14 +149,21 @@ class StudioSession:
 
     @property
     def connected(self) -> bool:
-        return self.catalog is not None
+        return self.catalog is not None and not getattr(getattr(self.catalog, "_session", None), "closed", False)
+
+    @property
+    def backend(self):
+        return getattr(self.catalog, "_session", None)
 
     def tables(self) -> list[dict]:
         if self.catalog is None:
             return []
         items = []
-        for name in self.catalog.list_tables():
-            schema = self.catalog.find_table(name) or {"name": name, "columns": []}
+        if self.backend is not None and self.backend.state in {"failed", "broken"}:
+            return []
+        catalog = self.backend.catalog_snapshot() if self.backend is not None else self.catalog
+        for name in catalog.list_tables():
+            schema = catalog.find_table(name) or {"name": name, "columns": []}
             items.append({
                 "name": schema["name"],
                 "columns": [
@@ -162,12 +173,12 @@ class StudioSession:
             })
         return items
 
-    def open(self, data_dir: str, mode: str = "database") -> list[dict]:
+    def open(self, data_dir: str, mode: str = "database", *, username=None, password=None, timeout=5) -> list[dict]:
         if mode not in ("compiler", "database"):
             raise ExecuteError(f"unsupported mode: {mode}")
         self.close()
         root = Path(data_dir).expanduser().resolve()
-        catalog, storage = open_database(str(root), mode=mode)
+        catalog, storage = open_database(str(root), mode=mode, username=username, password=password, timeout=timeout)
         self.catalog = catalog
         self.storage = storage
         self.mode = mode
@@ -186,7 +197,27 @@ class StudioSession:
             "results": [serialize_result(item) for item in results],
             "tables": self.tables(),
             "sql_failed": any(not item.ok for item in results),
+            "transaction_state": self.backend.state if self.backend else "idle",
+            "indexes": self.indexes(),
         }
+
+    def indexes(self):
+        if self.backend is None or self.backend.closed or self.backend.state == "failed":
+            return []
+        with self.backend.transaction(True):
+            from engine.security import visible_tables
+            visible = visible_tables(self.backend)
+            return [{key: value for key, value in spec.items() if key in {"name", "table", "column", "type", "height", "entries"}}
+                    for spec in self.storage.meta["indexes"].values() if spec["table"] in visible]
+
+    def admin(self, action, name, password=None):
+        if self.backend is None:
+            raise ExecuteError("账号管理需要数据库模式连接")
+        from engine.security import initialize, manage_user
+        if action == "init":
+            initialize(self.backend, name, password)
+        else:
+            manage_user(self.backend, action, name, password)
 
     def close(self) -> None:
         catalog, storage = self.catalog, self.storage
@@ -199,4 +230,8 @@ class StudioSession:
 
     def inspect(self, sql: str) -> list[Diagnostic]:
         """实时检查当前窗口 SQL，不执行、不改目录。"""
+        if self.backend is not None:
+            if self.backend.closed or self.backend.state == "failed":
+                return []
+            return self.backend.inspect(sql)
         return inspect_sql(sql, self.catalog)

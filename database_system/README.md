@@ -4,6 +4,8 @@
 
 基础 SQL、编译与执行流水线、记录编码、目录及页缓存已经完成集成。当前增加单表 UPDATE、多键 ORDER BY、INNER JOIN、GROUP BY、COUNT／SUM／AVG／MIN／MAX 和 HAVING，详见 [扩展说明](docs/extensions.md)。
 
+第二版进一步实现空值、新类型、索引、代价模型、EXPLAIN、事务、并发和访问控制，CLI 与桌面界面共用会话。运行 `python -m tools.optional_demo` 验证完整流程；启动界面使用 `python -m tools.studio`。具体语法、账号管理和旧库迁移见[八项扩展说明](docs/optional_extensions.md)。
+
 ## 运行检查
 
 在本目录运行：
@@ -36,7 +38,7 @@ python -m tools.extension_demo
 python -m tools.extension_demo --details
 ```
 
-脚本在 `data/` 下创建独立目录，执行 [扩展示例](examples/extensions/)，校验结果并保存日志。已有数据库文件格式兼容；正常关闭或断开连接后保存数据。
+脚本在 `data/` 下创建独立目录，执行 [扩展示例](examples/extensions/)，校验结果并保存日志。旧版数据库需使用 `python -m tools.migrate 旧目录 新目录` 迁移；自动提交语句执行成功即持久化，关闭未提交显式事务会回滚。
 
 测试同时覆盖模块、真实 SQL 链路、公共输出基准和跨进程重启。模块参数化测试不计入团队约定的公共 SQL 用例数量，最新验证结果见 [运行记录](docs/extensions_validation.md)。
 
@@ -49,7 +51,7 @@ python -m tools.extension_demo --details
 | C | semantic、types、catalog、page、buffer、file_manager |
 | D | planner、optimizer、errors、utils/results、executor、evaluator、runtime、持续集成 |
 
-上表记录基础开发归属。当前数据库扩展由负责人独立维护，UI 同伴只在界面分支工作。
+上表记录基础开发归属。当前分支已集成数据库扩展与桌面界面。
 
 AST 构造时位置使用关键字参数，例如 `ColumnDef("id", "INT", line=1, column=16)`。AST 序列化包含结构字段和节点名称，排除语义标注。Token 枚举值和公开名称一致。
 

@@ -1,7 +1,7 @@
 """D 负责：单条已检查 AST 转 JSON 兼容计划。"""
 
 from sql_compiler.ast_nodes import (
-    CreateTableStmt, DeleteStmt, InsertStmt, SelectStmt, Stmt, UpdateStmt,
+    CreateTableStmt, DeleteStmt, InsertStmt, SelectStmt, Stmt, UpdateStmt, ControlStmt,
 )
 from sql_compiler.catalog import Catalog
 from sql_compiler.errors import PlannerError
@@ -9,7 +9,14 @@ from sql_compiler.errors import PlannerError
 
 def plan(stmt: Stmt, catalog: Catalog) -> dict:
     """输出能被执行器单独消费的原始计划。"""
-    del catalog  # 表存在性与列绑定已由语义阶段完成
+    if isinstance(stmt, ControlStmt):
+        result = {"op": stmt.action, "name": stmt.name, "table": stmt.table,
+                  "column_name": stmt.column_name, "readonly": stmt.readonly,
+                  "permissions": stmt.permissions, "subject": stmt.subject, "format": stmt.format}
+        if stmt.statement is not None:
+            result["child"] = plan(stmt.statement, catalog)
+            result["estimation"] = "编译模式没有真实存储统计，估算不可用"
+        return result
     if isinstance(stmt, CreateTableStmt):
         return {
             "op": "CreateTable",
@@ -20,6 +27,7 @@ def plan(stmt: Stmt, catalog: Catalog) -> dict:
                     "type": column.col_type,
                     "line": column.line,
                     "column": column.column,
+                    **({"nullable": False} if not column.nullable else {}),
                 }
                 for column in stmt.columns
             ],

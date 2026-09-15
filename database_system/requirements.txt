@@ -1,1 +1,3 @@
 pytest
+portalocker[win32]==4.3.2; sys_platform == "win32"
+portalocker==4.3.2; sys_platform != "win32"

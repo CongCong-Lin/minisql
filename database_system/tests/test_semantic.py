@@ -172,8 +172,8 @@ def test_varchar_limit_counts_utf8_bytes(catalog, value, valid, context):
 
 @pytest.mark.parametrize("where", [
     literal(1), literal("a", "VARCHAR"), literal(1.5, "FLOAT"),
-    binary("=", literal(True, "BOOL"), literal(False, "BOOL")),
-    binary("+", literal(1.0, "FLOAT"), literal(1)),
+    binary(">", literal(True, "BOOL"), literal(False, "BOOL")),
+    binary("+", literal(1.0, "FLOAT"), literal("bad", "VARCHAR")),
     binary("=", literal(1), literal("1", "VARCHAR")),
     binary("OR", literal(True, "BOOL"), binary("+", literal("x", "VARCHAR"), literal(1))),
     UnaryExpr("NOT", literal(1), line=2, column=10),

@@ -1,5 +1,7 @@
 # 《大型平台软件设计实习》公共契约（v1.6）
 
+> 当前运行采用第二版数据库；本文末尾“第二版数据库补充契约”优先于旧版格式及类型限制，完整约定见[八项扩展说明](../../database_system/docs/optional_extensions.md)。
+
 > 本文档是四人开发的唯一权威接口标准，适用于 SQL 编译器、页式存储、数据库系统三个阶段。
 > 制定日期：2026-09-07；本次修订：2026-09-10。配套：[四人分工](team_plan.md)、[任务交接](handoff.md)。
 > v1.5 是基础开发冻结版。v1.6 按用户确认的独立扩展计划实现 UPDATE、排序、内连接、聚合；数据库由当前负责人维护，UI 同伴在独立分支开发后再合并。本次修订不代表原四人会签已经发生。
@@ -644,7 +646,7 @@ D 实现 `execute(plan: dict, catalog: Catalog, storage: StorageEngine) -> Execu
 D 在 `engine/runtime.py` 实现：
 
 ```python
-def open_database(data_dir: str, *, mode: str = "database"
+def open_database(data_dir: str, *, mode: str = "database", username=None, password=None, timeout=5
                   ) -> tuple[Catalog, StorageEngine | None]: ...
 
 def run(text: str, catalog: Catalog,
@@ -760,3 +762,13 @@ M1 的导入、签名、异常身份与结构快照检查保留；基础数据�
 - open_database／run／close_database／compile_sql 及 UI 已使用的 _scan_and_segment／_compile_segment 保持签名和返回约定。纯编译及实时检查不执行 UPDATE。
 - UI 由同伴在独立分支维护，最终合并后验证新算子树、结果别名、空值、实时错误定位和更新结果。不在数据库扩展中修改 UI 文件。
 - 测试覆盖每项功能、组合查询、异常恢复、旧数据库重启与优化等价。SQL 用例配完整预期；演示脚本使用独立数据库且核对结果。实际执行证据见 [验证记录](../../database_system/docs/extensions_validation.md)。
+# 第二版数据库补充契约（本轮优先）
+
+本文件后续章节保留基础实现与 v1 迁移读取契约。当前正常运行入口采用第二版，[八项扩展说明](../../database_system/docs/optional_extensions.md)中关于类型、存储、事务和权限的约定优先于下文旧版限制。
+
+- 统一入口 `engine.session.connect` 返回 `DatabaseSession`；既有运行接口转入该会话，真实数据库目录不能以编译模式绕过身份检查。
+- 默认自动提交，显式事务跨执行保持；失败事务只接受回滚或关闭。关闭不隐式提交。所有系统元数据、表数据与索引同事务持久化。
+- v2 页零为超级块，目录为可扩展系统堆表；v1 的固定映射与自页号只用于旧库迁移。页大小 4096、数据页头 16、最大记录 4076 字节保持不变。
+- 列支持 INT、VARCHAR、FLOAT、BOOL、DATE，默认可空，支持 NOT NULL；旧版列迁移后可空。
+- 新控制语句包括事务、索引、ANALYZE、EXPLAIN 和角色授权，语法见工程文法；密码只经过独立管理接口。
+- 逐语句结果可携带 `error_code`；界面载荷附事务状态和索引。EXPLAIN 不执行被解释语句，编译模式标记统计不可用。

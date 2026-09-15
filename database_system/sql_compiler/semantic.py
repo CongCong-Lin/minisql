@@ -2,7 +2,7 @@
 
 from sql_compiler.ast_nodes import (
     BinaryExpr, CreateTableStmt, DeleteStmt, Expr, IdentifierExpr, InsertStmt,
-    LiteralExpr, SelectStmt, Stmt, UnaryExpr, UpdateStmt,
+    LiteralExpr, SelectStmt, Stmt, UnaryExpr, UpdateStmt, ControlStmt,
 )
 from sql_compiler.catalog import Catalog
 from sql_compiler.errors import SemanticError
@@ -47,7 +47,7 @@ def _expression(expr: Expr, table: str, catalog: Catalog) -> str:
             errors = _literal_errors(current)
             if errors:
                 raise errors[0]
-            if current.lit_type not in {"INT", "VARCHAR", "FLOAT", "BOOL"}:
+            if current.lit_type not in {"INT", "VARCHAR", "FLOAT", "BOOL", "NULL", "DATE"}:
                 raise _error(current, f"未知字面量类型：{current.lit_type}")
             result = current.lit_type
         elif isinstance(current, IdentifierExpr):
@@ -77,6 +77,16 @@ def _expression(expr: Expr, table: str, catalog: Catalog) -> str:
 def analyze(stmts: list[Stmt], catalog: Catalog) -> list[Stmt]:
     """基于同一个目录逐句检查；顺序建表可见性由运行时编排。"""
     for stmt in stmts:
+        if isinstance(stmt, ControlStmt):
+            if stmt.statement is not None:
+                analyze([stmt.statement], catalog)
+            elif stmt.table is not None:
+                schema = catalog.find_table(stmt.table)
+                if schema is None:
+                    raise _error(stmt, f"表不存在：{stmt.table}")
+                if stmt.column_name is not None and catalog.find_column(stmt.table, stmt.column_name) is None:
+                    raise _error(stmt, f"列不存在：{stmt.column_name}")
+            continue
         if isinstance(stmt, UpdateStmt):
             from sql_compiler.query_binding import bind_update
             stmt.binding = None
@@ -121,6 +131,8 @@ def analyze(stmts: list[Stmt], catalog: Catalog) -> list[Stmt]:
                 wanted = known[name.lower()]
                 if not insert_type_matches(wanted, value.lit_type):
                     errors.append(_error(value, f"列 {name} 需要 {wanted}，实际为 {value.lit_type}"))
+                if value.value is None and not catalog.find_column(stmt.table, name).nullable:
+                    errors.append(_error(value, f"列 {name} 不允许 NULL"))
                 errors.extend(_literal_errors(value))
                 value.expr_type = value.lit_type
             if errors:

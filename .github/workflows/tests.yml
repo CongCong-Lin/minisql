@@ -23,3 +23,5 @@ jobs:
       - run: python -m pytest
       - run: python -m tools.case_runner --suite all
         working-directory: database_system
+      - run: python -m tools.optional_demo
+        working-directory: database_system

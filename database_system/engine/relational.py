@@ -28,13 +28,17 @@ def execute_query(plan, catalog, storage):
 def evaluate_relation(plan, catalog, storage):
     """递归执行关系算子，内部列索引与输入行结构一致。"""
     op = plan["op"]
-    if op == "SeqScan":
+    if op in {"SeqScan", "IndexScan"}:
         schema = catalog.find_table(plan["table"])
         if schema is None:
             raise ExecuteError(f"table '{plan['table']}' does not exist")
         columns = plan.get("output") or [{"name": column.name, "type": column.col_type}
                                          for column in schema["columns"]]
-        rows = [row for _rid, row in storage.scan_records(plan["table"], schema["columns"])]
+        if op == "IndexScan":
+            from engine.physical import scan_index
+            rows = [row for _rid, row in scan_index(plan, storage, schema["columns"])]
+        else:
+            rows = [row for _rid, row in storage.scan_records(plan["table"], schema["columns"])]
         return Relation(columns, rows)
     if op == "Filter":
         source = evaluate_relation(plan["child"], catalog, storage)
@@ -105,7 +109,10 @@ def _accumulate(state, function, value, *, star=False):
         return
     state["count"] = checked_query_integer(state["count"] + 1)
     if function == "SUM":
-        state["total"] = checked_query_integer(state["total"] + value)
+        total = state["total"] + value
+        state["total"] = checked_query_integer(total) if type(total) is int else total
+        if type(total) is float and not math.isfinite(total):
+            raise ExecuteError("浮点聚合超出范围")
     elif function == "AVG":
         # 中间和使用 Python 整数，避免平均值仍合法却因求和溢出而失败。
         state["total"] += value

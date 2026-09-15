@@ -6,7 +6,8 @@ import argparse
 import sys
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
+from concurrent.futures import ThreadPoolExecutor
 
 from sql_compiler.errors import CompileError, ExecuteError
 from studio.inspect import Diagnostic
@@ -185,8 +186,12 @@ def _attach_data_grid(parent: tk.Misc, columns: list[str], rows: list) -> None:
 class StudioApp(tk.Tk):
     """SQLyog 风格的 MiniSQL 桌面客户端。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, async_operations=True) -> None:
         super().__init__()
+        self._async_operations = async_operations
+        self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="minisql-session")
+        self._busy = False
+        self._closing = False
         self.title("MiniSQL Studio")
         self.configure(bg="#d6d6d6")
         self.session = StudioSession()
@@ -247,6 +252,10 @@ class StudioApp(tk.Tk):
         query.add_separator()
         query.add_command(label="执行\tF9", command=self.execute)
         menu.add_cascade(label="查询", menu=query)
+        account = tk.Menu(menu, tearoff=0)
+        for action, label in (("init", "开启账号权限"), ("create", "创建用户"), ("password", "修改密码"), ("drop", "删除用户")):
+            account.add_command(label=label, command=lambda a=action: self._account_action(a))
+        menu.add_cascade(label="账号", menu=account)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="关于", command=self._about)
         menu.add_cascade(label="帮助", menu=help_menu)
@@ -290,6 +299,18 @@ class StudioApp(tk.Tk):
         self.btn_run.pack(side=tk.LEFT, padx=(8, 4))
         ttk.Button(row1, text="新建查询", command=self.new_query).pack(side=tk.LEFT)
 
+        login = ttk.Frame(wrap, style="Tool.TFrame")
+        login.pack(fill=tk.X, padx=8, pady=2)
+        ttk.Label(login, text="用户名").pack(side=tk.LEFT)
+        self.user_var = tk.StringVar()
+        ttk.Entry(login, textvariable=self.user_var, width=14).pack(side=tk.LEFT, padx=4)
+        ttk.Label(login, text="密码").pack(side=tk.LEFT)
+        self.password_var = tk.StringVar()
+        ttk.Entry(login, textvariable=self.password_var, show="*", width=16).pack(side=tk.LEFT, padx=4)
+        for command, title in (("BEGIN;", "开始事务"), ("BEGIN READ ONLY;", "只读事务"), ("COMMIT;", "提交"), ("ROLLBACK;", "回滚")):
+            ttk.Button(login, text=title, command=lambda q=command: self._run_and_show(q)).pack(side=tk.LEFT, padx=2)
+        self.tx_label = ttk.Label(login, text="自动提交")
+        self.tx_label.pack(side=tk.LEFT, padx=8)
         row2 = ttk.Frame(wrap, style="Tool.TFrame")
         row2.pack(fill=tk.X, padx=8, pady=(0, 6))
         for name in ("CREATE", "INSERT", "SELECT", "UPDATE", "DELETE"):
@@ -662,6 +683,8 @@ class StudioApp(tk.Tk):
             pass
 
     def new_query(self, sql: str = "") -> None:
+        if self._busy:
+            return
         """打开一个空白（或带初始 SQL）的新查询页签。"""
         self._save_current_query()
         self._query_seq += 1
@@ -670,12 +693,16 @@ class StudioApp(tk.Tk):
         self._load_query(self._query_index)
 
     def switch_query(self, index: int) -> None:
+        if self._busy:
+            return
         if index == self._query_index or not (0 <= index < len(self._queries)):
             return
         self._save_current_query()
         self._load_query(index)
 
     def close_query(self, index: int | None = None) -> None:
+        if self._busy:
+            return
         if index is None:
             index = self._query_index
         if not (0 <= index < len(self._queries)):
@@ -739,22 +766,68 @@ class StudioApp(tk.Tk):
         if chosen:
             self.dir_var.set(chosen)
 
-    def connect(self) -> None:
-        try:
-            tables = self.session.open(self.dir_var.get().strip() or "data", self._mode_value())
-        except (CompileError, ExecuteError, OSError) as exc:
-            messagebox.showerror("连接失败", str(exc), parent=self)
-            self.st_msg.configure(text="连接失败")
+    def _dispatch(self, work, complete, *, quiet=False):
+        """数据库始终在固定工作线程执行，主线程只轮询并更新窗口。"""
+        if self._busy or self._closing:
             return
-        self._set_connected(True)
-        self._fill_tree(tables)
-        self.st_msg.configure(text="连接成功")
-        self._schedule_inspect()
+        if not self._async_operations:
+            try:
+                complete(work())
+            except Exception as exc:
+                if not quiet:
+                    messagebox.showerror("操作失败", str(exc), parent=self)
+            return
+        self._busy = True
+        future = self._worker.submit(work)
+        if not quiet:
+            self.st_msg.configure(text="正在处理…")
+        def poll():
+            if not future.done():
+                self.after(20, poll)
+                return
+            self._busy = False
+            if self._closing:
+                return
+            try:
+                complete(future.result())
+            except Exception as exc:
+                if not quiet:
+                    messagebox.showerror("操作失败", str(exc), parent=self)
+                    self.st_msg.configure(text="操作失败")
+            if not quiet:
+                self._schedule_inspect()
+        self.after(20, poll)
+
+    def _account_action(self, action):
+        if self._busy or not self.session.connected:
+            return
+        name = simpledialog.askstring("账号管理", "目标用户名：", parent=self)
+        if name is None:
+            return
+        password = None
+        if action != "drop":
+            password = simpledialog.askstring("账号管理", "新密码（至少八个字符）：", show="*", parent=self)
+            if password is None:
+                return
+        self._dispatch(lambda: self.session.admin(action, name, password),
+                       lambda _: self.st_msg.configure(text="账号管理操作完成"))
+
+    def connect(self) -> None:
+        directory, mode = self.dir_var.get().strip() or "data", self._mode_value()
+        username, password = self.user_var.get().strip() or None, self.password_var.get() or None
+        self.password_var.set("")
+        def done(tables):
+            self._set_connected(True)
+            self._fill_tree(tables)
+            self.st_msg.configure(text="连接成功")
+            self._schedule_inspect()
+        self._dispatch(lambda: self.session.open(directory, mode, username=username, password=password), done)
 
     def disconnect(self) -> None:
-        self.session.close()
-        self._set_connected(False)
-        self._schedule_inspect()
+        def done(_):
+            self._set_connected(False)
+            self.tx_label.configure(text="自动提交")
+        self._dispatch(self.session.close, done)
 
     def execute(self, _event=None) -> None:
         if not self.session.connected:
@@ -763,15 +836,19 @@ class StudioApp(tk.Tk):
 
     def _run_and_show(self, sql: str, *, status: str | None = None,
                       result_title: str | None = None) -> None:
+        if self._busy or not self.session.connected:
+            return
         started = time.perf_counter()
-        try:
-            payload = self.session.run_sql(sql)
-        except (CompileError, ExecuteError) as exc:
-            messagebox.showerror("执行失败", str(exc), parent=self)
-            self.st_msg.configure(text="执行失败")
+        query_id = self._query_index
+        self._dispatch(lambda: self.session.run_sql(sql),
+                       lambda payload: self._finish_run(payload, sql, started, query_id, status, result_title))
+
+    def _finish_run(self, payload, sql, started, query_id, status, result_title):
+        """异步返回时更新发起查询的标签，避免写到后来切换的查询。"""
+        if query_id >= len(self._queries):
             return
         elapsed_ms = round((time.perf_counter() - started) * 1000)
-        current = self._queries[self._query_index]
+        current = self._queries[query_id]
         current["payload"] = payload
         current["result_title"] = result_title
         current["locate_source"] = result_title is None
@@ -786,6 +863,10 @@ class StudioApp(tk.Tk):
             current["st_msg"] = "SQL 含失败语句"
         else:
             current["st_msg"] = status or "执行完成"
+        state = payload.get("transaction_state", "idle")
+        self.tx_label.configure(text={"idle": "自动提交", "active": "事务进行中", "failed": "失败待回滚", "broken": "连接失效"}.get(state, state))
+        if query_id != self._query_index:
+            return
         self._last = payload
         self._fill_tree(payload["tables"])
         self.st_time.configure(text=current["st_time"])
@@ -833,6 +914,7 @@ class StudioApp(tk.Tk):
             self.nb.add(self._plan_tab(results, "opt_plan"), text="Opt Plan")
         self.nb.add(self._text_tab(self._history_text()), text="History")
         self.nb.add(self._text_tab(pretty(payload.get("tables") or [])), text="Object Info")
+        self.nb.add(self._text_tab(pretty(payload.get("indexes") or [])), text="Indexes")
         if first:
             for tab in self.nb.tabs():
                 if self.nb.tab(tab, "text") == first:
@@ -980,10 +1062,14 @@ class StudioApp(tk.Tk):
     def _inspect_now(self) -> None:
         self._inspect_job = None
         sql = self.sql.get("1.0", "end-1c")
-        try:
-            diagnostics = self.session.inspect(sql)
-        except Exception:
-            diagnostics = []
+        if self._busy or self._closing:
+            return
+        def done(diagnostics):
+            if sql == self.sql.get("1.0", "end-1c"):
+                self._apply_diagnostics(diagnostics)
+        self._dispatch(lambda: self.session.inspect(sql), done, quiet=True)
+
+    def _apply_diagnostics(self, diagnostics):
         self._diagnostics = diagnostics
         self.sql.tag_remove("sql-error", "1.0", tk.END)
         for item in diagnostics:
@@ -1096,14 +1182,25 @@ class StudioApp(tk.Tk):
         )
 
     def _on_close(self) -> None:
+        if self._closing:
+            return
+        self._closing = True
         if self._inspect_job is not None:
             self.after_cancel(self._inspect_job)
         self._hide_tip()
-        try:
+        if not self._async_operations:
             self.session.close()
-        except Exception:
-            pass
-        self.destroy()
+            self._worker.shutdown(wait=False)
+            self.destroy()
+            return
+        future = self._worker.submit(self.session.close)
+        def finish():
+            if not future.done():
+                self.after(20, finish)
+                return
+            self._worker.shutdown(wait=False)
+            self.destroy()
+        self.after(20, finish)
 
 
 def main(argv: list[str] | None = None) -> int:

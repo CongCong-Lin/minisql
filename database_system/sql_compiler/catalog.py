@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from sql_compiler.ast_nodes import ColumnDef
 from sql_compiler.errors import ExecuteError, SemanticError
-from sql_compiler.types import INT_MAX
+from sql_compiler.types import INT_MAX, STORAGE_TYPES
 
 if TYPE_CHECKING:
     from storage.storage_engine import StorageEngine
@@ -95,7 +95,7 @@ class Catalog:
                 fail("列定义的源码位置非法")
             if not _valid_name(col.name):
                 fail(f"非法或保留的列名：{col.name}", col)
-            if col.col_type not in ("INT", "VARCHAR"):
+            if col.col_type not in STORAGE_TYPES or type(col.nullable) is not bool:
                 fail(f"不支持的列类型：{col.col_type}", col)
             if col.name.lower() in seen:
                 fail(f"列重复：{col.name}", col)
@@ -157,6 +157,10 @@ class Catalog:
             if not raw:
                 return {}
             data = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+            if isinstance(data, dict) and data.get("version") == 2:
+                data = {key: value for key, value in data.items() if key != "version"}
+            elif isinstance(data, dict) and "version" in data:
+                raise ValueError("不支持的 JSON 目录版本")
             if not isinstance(data, dict) or set(data) != {"tables"}:
                 raise ValueError("目录根结构必须只包含 tables")
             if not isinstance(data["tables"], list):
@@ -169,11 +173,12 @@ class Catalog:
                     raise ValueError("columns 必须为数组")
                 columns = []
                 for col in table["columns"]:
-                    if (not isinstance(col, dict) or set(col) != {
+                    if (not isinstance(col, dict) or set(col) - {"nullable"} != {
                         "node", "name", "col_type", "line", "column"
                     } or col["node"] != "ColumnDef"):
                         raise ValueError("列结构非法")
                     columns.append(ColumnDef(col["name"], col["col_type"],
+                                             nullable=col.get("nullable", True),
                                              line=col["line"], column=col["column"]))
                 temporary.create_table(table["name"], columns)
             return temporary._tables
@@ -186,7 +191,7 @@ class Catalog:
         path = Path(self.json_path)
         temporary = None
         try:
-            data = {"tables": [
+            data = {"version": 2, "tables": [
                 {"name": tables[key]["name"],
                  "columns": [col.to_dict() for col in tables[key]["columns"]]}
                 for key in sorted(tables)

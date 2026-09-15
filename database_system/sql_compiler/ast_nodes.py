@@ -25,6 +25,8 @@ class Node:
         for member in fields(self):
             if member.metadata.get("serialize", True):
                 value = getattr(self, member.name)
+                if member.metadata.get("omit_default") and value == member.default:
+                    continue
                 if member.metadata.get("omit_empty") and (value is None or value == []):
                     continue
                 result[member.name] = encode(value)
@@ -50,6 +52,7 @@ class ColumnDef(Node):
 
     name: str
     col_type: str
+    nullable: bool = field(default=True, kw_only=True, metadata={"omit_default": True})
 
 
 @dataclass
@@ -131,8 +134,23 @@ class IdentifierExpr(Expr):
 class LiteralExpr(Expr):
     """保存 Parser 转换后的值和显式类型。"""
 
-    value: int | float | str | bool
+    value: int | float | str | bool | None
     lit_type: str
+
+
+@dataclass
+class ControlStmt(Stmt):
+    """事务、索引、解释及授权语句的明确控制节点。"""
+
+    action: str
+    name: str | None = None
+    table: str | None = None
+    column_name: str | None = None
+    readonly: bool = False
+    permissions: list[str] = field(default_factory=list)
+    subject: str | None = None
+    statement: Stmt | None = None
+    format: str = "TEXT"
 
 
 @dataclass

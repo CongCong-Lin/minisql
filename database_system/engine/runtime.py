@@ -22,7 +22,7 @@ from utils.results import StmtResult
 _SYSTEM_CATALOG = "__catalog__"
 
 
-def open_database(data_dir: str, *, mode: str = "database"
+def _open_legacy_database(data_dir: str, *, mode: str = "database"
                   ) -> tuple[Catalog, StorageEngine | None]:
     """按显式模式打开目录及存储，新库先引导系统目录。"""
     if mode not in ("compiler", "database"):
@@ -55,9 +55,26 @@ def open_database(data_dir: str, *, mode: str = "database"
         raise
 
 
+def open_database(data_dir: str, *, mode: str = "database", username=None, password=None, timeout=5):
+    """数据库入口统一创建受事务和权限保护的会话。"""
+    if mode == "compiler":
+        root = Path(data_dir)
+        if (root / "minisql.db").exists():
+            raise ExecuteError("编译模式需要独立目录，不能绕过数据库会话读取真实数据库")
+        return _open_legacy_database(data_dir, mode=mode)
+    if mode != "database":
+        raise ExecuteError("不支持的运行模式")
+    from engine.session import connect
+    session = connect(data_dir, username=username, password=password, timeout=timeout)
+    return session.catalog, session.storage
+
+
 def run(text: str, catalog: Catalog,
         storage: StorageEngine | None = None) -> list[StmtResult]:
     """完整扫描并按分号分段，逐段编译、提交或执行，保留全部结果。"""
+    session = getattr(catalog, "_session", None)
+    if session is not None:
+        return session.run(text)
     segments = _scan_and_segment(text)
     results: list[StmtResult] = []
     for segment in segments:
@@ -75,13 +92,23 @@ def run(text: str, catalog: Catalog,
 def close_database(catalog: Catalog,
                    storage: StorageEngine | None) -> None:
     """数据库模式关闭存储，编译模式不额外提交目录。"""
-    del catalog
+    session = getattr(catalog, "_session", None)
+    if session is not None:
+        session.close()
+        return
     if storage is not None:
         storage.close()
 
 
 def _compile_sql(text: str, catalog: Catalog) -> list[StmtResult]:
     """实现公开纯编译入口，使用目录快照并在首个失败段抛错。"""
+    session = getattr(catalog, "_session", None)
+    if session is not None:
+        diagnostics = session.inspect(text)
+        if diagnostics:
+            item = diagnostics[0]
+            raise CompileError(item.stage, item.line, item.column, item.reason)
+        catalog = session.catalog_snapshot()
     segments = _scan_and_segment(text)
     working = catalog.snapshot() if segments else catalog
     results: list[StmtResult] = []

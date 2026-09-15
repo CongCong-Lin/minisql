@@ -27,6 +27,9 @@ def evaluate(expr: dict, row: tuple, columns: list[ColumnDef]) -> object:
     if kind == "IdentifierExpr":
         return row[_column_index(columns, expr["name"])]
     if kind == "UnaryExpr":
+        if expr.get("op") in {"IS NULL", "IS NOT NULL"}:
+            empty = evaluate(expr["operand"], row, columns) is None
+            return empty if expr["op"] == "IS NULL" else not empty
         if expr.get("op") != "NOT":
             raise ExecuteError(f"unsupported unary operator '{expr.get('op')}'")
         operand = evaluate(expr["operand"], row, columns)
@@ -60,9 +63,9 @@ def _eval_binary(expr: dict, row: tuple, columns: list[ColumnDef]) -> object:
     if left is None or right is None:
         return None
     if op in {"+", "-", "*", "/"}:
-        if expr.get("value_type") in {"BIGINT", "FLOAT"}:
+        if expr.get("value_type") in {"BIGINT", "FLOAT"} or type(left) is float or type(right) is float:
             from engine.query_numbers import query_arithmetic
-            return query_arithmetic(op, left, right, expr["value_type"])
+            return query_arithmetic(op, left, right, expr.get("value_type") or "FLOAT")
         try:
             return type_rules.checked_int_arithmetic(op, left, right)
         except IntegerArithmeticError as exc:
